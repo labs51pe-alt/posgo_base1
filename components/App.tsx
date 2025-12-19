@@ -117,7 +117,8 @@ const App: React.FC = () => {
             await refreshAllData();
         } else {
              setView(ViewState.POS);
-             setProducts(await StorageService.getProducts());
+             const prods = await StorageService.getProducts();
+             setProducts(prods);
         }
         setTimeout(() => setLoading(false), 800);
     };
