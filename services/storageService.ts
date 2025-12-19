@@ -147,7 +147,10 @@ export const StorageService = {
         .eq('store_id', storeId)
         .order('date', { ascending: false });
     
-    if (error) return [];
+    if (error) {
+        console.error("Error fetching purchases:", error);
+        return [];
+    }
 
     return (data || []).map((p: any) => ({ 
         id: p.id,
@@ -300,7 +303,6 @@ export const StorageService = {
     const { data: productsData } = await supabase.from('products').select('*').eq('store_id', DEMO_TEMPLATE_ID).order('name', { ascending: true });
     if (!productsData) return [];
     
-    // Recuperamos imágenes de la plantilla
     const { data: imagesData } = await supabase.from('product_images').select('*').eq('store_id', DEMO_TEMPLATE_ID);
     
     return productsData.map((p: any) => {

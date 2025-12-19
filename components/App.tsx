@@ -358,7 +358,7 @@ const App: React.FC = () => {
                         <Sparkles className="w-4 h-4 animate-spin-slow" />
                     </div>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight max-w-sm mx-auto">
-                        Estamos preparando algo <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-indigo-600">mágico</span> para ti y tu negocio...
+                        Estamos preparando algo <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-indigo-600">mágico</span> para ti...
                     </h2>
                 </div>
 
@@ -402,7 +402,7 @@ const App: React.FC = () => {
                     <div className="p-5 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <div>
                             <h2 className="font-black text-lg sm:text-xl text-slate-800">{currentProduct.id ? 'Editar Producto' : 'Nuevo Producto'}</h2>
-                            <span className="text-[9px] sm:text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md mt-1 inline-block uppercase">Catálogo Sincronizado</span>
+                            <span className="text-[9px] sm:text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md mt-1 inline-block uppercase">Gestión de Catálogo</span>
                         </div>
                         <button onClick={() => setIsProductModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">✕</button>
                     </div>
