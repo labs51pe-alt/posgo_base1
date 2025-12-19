@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lead, Store, Product } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Building2, Trash2, RefreshCw, ShieldAlert, Package, Plus, Edit, X, ImageIcon, Terminal } from 'lucide-react';
+import { Users, Building2, Trash2, RefreshCw, ShieldAlert, Package, Plus, Edit, X, ImageIcon, Terminal, Layers, Zap } from 'lucide-react';
 
 interface SuperAdminProps {
     onEditProduct?: (product: Product) => void;
@@ -114,7 +114,7 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                     <>
                                         <th className="p-6">Img</th>
                                         <th className="p-6">Nombre del Producto</th>
-                                        <th className="p-6">Categoría</th>
+                                        <th className="p-6">Categoría / Tipo</th>
                                         <th className="p-6 text-right">Precio</th>
                                         <th className="p-6 text-right">Acciones</th>
                                     </>
@@ -149,7 +149,21 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                         )}
                                     </td>
                                     <td className="p-6 font-bold text-slate-800">{p.name}</td>
-                                    <td className="p-6"><span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-1 rounded-md font-bold uppercase">{p.category}</span></td>
+                                    <td className="p-6">
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-1 rounded-md font-bold uppercase">{p.category}</span>
+                                            {p.hasVariants && (
+                                                <span className="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded-md font-bold uppercase flex items-center gap-1">
+                                                    <Layers className="w-3 h-3"/> Variantes
+                                                </span>
+                                            )}
+                                            {p.isPack && (
+                                                <span className="bg-amber-50 text-amber-600 text-[10px] px-2 py-1 rounded-md font-bold uppercase flex items-center gap-1">
+                                                    <Zap className="w-3 h-3 fill-current"/> Combo
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="p-6 text-right font-black text-slate-700">S/{p.price.toFixed(2)}</td>
                                     <td className="p-6 text-right">
                                         <div className="flex justify-end gap-2">

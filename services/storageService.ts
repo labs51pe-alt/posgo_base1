@@ -99,9 +99,13 @@ export const StorageService = {
         const prodImages = imagesData ? imagesData.filter((img: any) => img.product_id === p.id).map((img: any) => img.image_data) : [];
         return { 
             id: p.id, name: p.name, price: Number(p.price), category: p.category, 
-            stock: Number(p.stock), barcode: p.barcode, hasVariants: p.has_variants, 
-            variants: Array.isArray(p.variants) ? p.variants : [], images: prodImages, 
-            cost: Number(p.cost || 0), isPack: p.is_pack, packItems: Array.isArray(p.pack_items) ? p.pack_items : []
+            stock: Number(p.stock), barcode: p.barcode, 
+            hasVariants: p.has_variants, 
+            variants: Array.isArray(p.variants) ? p.variants : [], 
+            images: prodImages, 
+            cost: Number(p.cost || 0), 
+            isPack: p.is_pack, 
+            packItems: Array.isArray(p.pack_items) ? p.pack_items : []
         };
     });
   },
@@ -303,7 +307,8 @@ export const StorageService = {
         const prodImages = imagesData ? imagesData.filter((img: any) => img.product_id === p.id).map((img: any) => img.image_data) : [];
         return {
             id: p.id, name: p.name, price: Number(p.price), category: p.category, 
-            stock: Number(p.stock), barcode: p.barcode, hasVariants: p.has_variants, 
+            stock: Number(p.stock), barcode: p.barcode, 
+            hasVariants: p.has_variants, 
             variants: Array.isArray(p.variants) ? p.variants : [], 
             images: prodImages, 
             cost: Number(p.cost || 0),
@@ -342,7 +347,6 @@ export const StorageService = {
   },
 
   deleteDemoProduct: async (productId: string) => {
-      // Borramos de la plantilla
       await supabase.from('product_images').delete().eq('product_id', productId).eq('store_id', DEMO_TEMPLATE_ID);
       await supabase.from('products').delete().eq('id', productId).eq('store_id', DEMO_TEMPLATE_ID);
   }
