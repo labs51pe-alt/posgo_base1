@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lead, Store, Product } from '../types';
 import { StorageService } from '../services/storageService';
@@ -142,7 +143,7 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                 <tr key={p.id} className="hover:bg-slate-50/50 group">
                                     <td className="p-6">
                                         {p.images && p.images.length > 0 ? (
-                                            <img src={p.images[0]} className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm"/>
+                                            <img src={p.images[0]} className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm" alt=""/>
                                         ) : (
                                             <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-300 font-bold text-xs italic">N/A</div>
                                         )}

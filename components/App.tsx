@@ -236,8 +236,9 @@ const App: React.FC = () => {
           ]);
           
           refreshAllData();
-      } catch (error) {
+      } catch (error: any) {
           console.error("Error al sincronizar venta:", error);
+          alert("Error de sincronización: " + (error?.message || JSON.stringify(error)));
       } finally {
           setIsSyncing(false);
       }
@@ -286,7 +287,7 @@ const App: React.FC = () => {
           if (result.success) {
               setRefreshTrigger(prev => prev + 1);
               setIsProductModalOpen(false);
-          } else { alert("Error: " + result.error); }
+          } else { alert("Error: " + (result.error?.message || JSON.stringify(result.error))); }
           return;
       }
 

@@ -123,7 +123,7 @@ export const StorageService = {
           }
           return { success: true };
       } catch (error: any) {
-          return { success: false, error: error.message };
+          return { success: false, error: error.message || error };
       }
   },
 
@@ -192,16 +192,32 @@ export const StorageService = {
     const storeId = await getStoreId();
     const { data } = await supabase.from('purchases').select('*').eq('store_id', storeId).order('date', { ascending: false });
     return (data || []).map((p: any) => ({ 
-        ...p, items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items 
+        id: p.id,
+        date: p.date,
+        supplierId: p.supplier_id || p.supplierId,
+        invoiceNumber: p.invoice_number || p.invoiceNumber,
+        total: Number(p.total || 0),
+        amountPaid: Number(p.amount_paid || p.amountPaid || 0),
+        items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items,
+        status: p.status,
+        received: p.received
     }));
   },
 
   savePurchase: async (p: Purchase) => {
     const storeId = await getStoreId();
+    // Mapeamos a snake_case para la base de datos para evitar errores de schema
     const { error } = await supabase.from('purchases').insert({ 
-        id: p.id, date: p.date, supplierId: p.supplierId, invoiceNumber: p.invoiceNumber,
-        total: p.total, amountPaid: p.amountPaid, items: p.items, status: p.status,
-        received: p.received, store_id: storeId 
+        id: p.id, 
+        date: p.date, 
+        supplier_id: p.supplierId, 
+        invoice_number: p.invoiceNumber,
+        total: p.total, 
+        amount_paid: p.amountPaid, 
+        items: p.items, 
+        status: p.status,
+        received: p.received, 
+        store_id: storeId 
     });
     if (error) throw error;
   },
@@ -211,7 +227,7 @@ export const StorageService = {
     const { error } = await supabase.from('purchases').update({ 
         status: p.status, 
         received: p.received,
-        amountPaid: p.amountPaid 
+        amount_paid: p.amountPaid 
     }).eq('id', p.id).eq('store_id', storeId);
     if (error) throw error;
   },
@@ -220,7 +236,6 @@ export const StorageService = {
       const storeId = await getStoreId();
       if (purchase.received === 'YES') return;
 
-      // 1. Actualizar stock Cloud de cada producto
       for (const item of purchase.items) {
           const { data: product } = await supabase.from('products')
             .select('stock')
@@ -238,7 +253,6 @@ export const StorageService = {
           }
       }
 
-      // 2. Marcar como recibida
       await supabase.from('purchases')
         .update({ received: 'YES' })
         .eq('id', purchase.id)
