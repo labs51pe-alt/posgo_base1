@@ -95,23 +95,14 @@ export const StorageService = {
   getDemoTemplate: async (force = false): Promise<Product[]> => {
     const { data: productsData } = await supabase.from('products').select('*').eq('store_id', DEMO_TEMPLATE_ID).order('name', { ascending: true });
     if (!productsData) return [];
-    
     const { data: imagesData } = await supabase.from('product_images').select('*').eq('store_id', DEMO_TEMPLATE_ID);
-    
     return productsData.map((p: any) => {
         const prodImages = imagesData ? imagesData.filter((img: any) => img.product_id === p.id).map((img: any) => img.image_data) : [];
         let variants = Array.isArray(p.variants) ? p.variants : [];
         return { 
-            id: p.id, 
-            name: p.name, 
-            price: Number(p.price), 
-            category: p.category, 
-            stock: Number(p.stock), 
-            barcode: p.barcode, 
-            hasVariants: variants.length > 0, 
-            variants: variants, 
-            images: prodImages,
-            cost: Number(p.cost || 0)
+            id: p.id, name: p.name, price: Number(p.price), category: p.category, 
+            stock: Number(p.stock), barcode: p.barcode, hasVariants: variants.length > 0, 
+            variants: variants, images: prodImages, cost: Number(p.cost || 0)
         };
     });
   },
@@ -119,24 +110,14 @@ export const StorageService = {
   saveDemoProductToTemplate: async (product: Product) => {
       try {
           await supabase.from('products').upsert({ 
-              id: product.id, 
-              name: product.name, 
-              price: product.price, 
-              stock: product.stock, 
-              category: product.category, 
-              barcode: product.barcode, 
-              variants: product.variants || [], 
-              cost: product.cost || 0,
-              store_id: DEMO_TEMPLATE_ID 
+              id: product.id, name: product.name, price: product.price, stock: product.stock, 
+              category: product.category, barcode: product.barcode, variants: product.variants || [], 
+              cost: product.cost || 0, store_id: DEMO_TEMPLATE_ID 
           });
           if (product.images) {
               await supabase.from('product_images').delete().eq('product_id', product.id).eq('store_id', DEMO_TEMPLATE_ID);
               if (product.images.length > 0) {
-                  const imageInserts = product.images.map(imgData => ({ 
-                      product_id: product.id, 
-                      image_data: imgData, 
-                      store_id: DEMO_TEMPLATE_ID 
-                  }));
+                  const imageInserts = product.images.map(imgData => ({ product_id: product.id, image_data: imgData, store_id: DEMO_TEMPLATE_ID }));
                   await supabase.from('product_images').insert(imageInserts);
               }
           }
@@ -146,31 +127,17 @@ export const StorageService = {
       }
   },
 
-  // Products
   getProducts: async (): Promise<Product[]> => {
     const storeId = await getStoreId();
     const { data: productsData } = await supabase.from('products').select('*').eq('store_id', storeId).order('name', { ascending: true });
-    
-    if (!productsData || productsData.length === 0) {
-        return await StorageService.getDemoTemplate();
-    }
-    
+    if (!productsData || productsData.length === 0) return await StorageService.getDemoTemplate();
     const { data: imagesData } = await supabase.from('product_images').select('*').eq('store_id', storeId);
-    
     return productsData.map((p: any) => {
         const prodImages = imagesData ? imagesData.filter((img: any) => img.product_id === p.id).map((img: any) => img.image_data) : [];
         let variants = Array.isArray(p.variants) ? p.variants : [];
         return { 
-            id: p.id, 
-            name: p.name, 
-            price: Number(p.price), 
-            category: p.category, 
-            stock: Number(p.stock), 
-            barcode: p.barcode, 
-            hasVariants: variants.length > 0, 
-            variants: variants, 
-            images: prodImages,
-            cost: Number(p.cost || 0)
+            id: p.id, name: p.name, price: Number(p.price), category: p.category, stock: Number(p.stock), 
+            barcode: p.barcode, hasVariants: variants.length > 0, variants: variants, images: prodImages, cost: Number(p.cost || 0)
         };
     });
   },
@@ -178,24 +145,14 @@ export const StorageService = {
   saveProductWithImages: async (product: Product) => {
       const storeId = await getStoreId();
       await supabase.from('products').upsert({ 
-          id: product.id, 
-          name: product.name, 
-          price: product.price, 
-          stock: product.stock, 
-          category: product.category, 
-          barcode: product.barcode, 
-          variants: product.variants || [], 
-          cost: product.cost || 0,
-          store_id: storeId 
+          id: product.id, name: product.name, price: product.price, stock: product.stock, 
+          category: product.category, barcode: product.barcode, variants: product.variants || [], 
+          cost: product.cost || 0, store_id: storeId 
       });
       if (product.images) {
           await supabase.from('product_images').delete().eq('product_id', product.id).eq('store_id', storeId);
           if (product.images.length > 0) {
-              const imageInserts = product.images.map(imgData => ({ 
-                  product_id: product.id, 
-                  image_data: imgData, 
-                  store_id: storeId 
-              }));
+              const imageInserts = product.images.map(imgData => ({ product_id: product.id, image_data: imgData, store_id: storeId }));
               await supabase.from('product_images').insert(imageInserts);
           }
       }
@@ -205,15 +162,8 @@ export const StorageService = {
       const storeId = await getStoreId();
       for (const p of products) {
           await supabase.from('products').upsert({ 
-              id: p.id, 
-              name: p.name, 
-              price: p.price, 
-              stock: p.stock, 
-              category: p.category, 
-              barcode: p.barcode, 
-              variants: p.variants || [], 
-              cost: p.cost || 0,
-              store_id: storeId 
+              id: p.id, name: p.name, price: p.price, stock: p.stock, category: p.category, 
+              barcode: p.barcode, variants: p.variants || [], cost: p.cost || 0, store_id: storeId 
           });
       }
   },
@@ -224,13 +174,11 @@ export const StorageService = {
       await supabase.from('products').delete().eq('id', productId).eq('store_id', storeId);
   },
 
-  // Transactions
   getTransactions: async (): Promise<Transaction[]> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('transactions').select('*').eq('store_id', storeId).order('date', { ascending: false });
     return (data || []).map((t: any) => ({ 
-        ...t, 
-        items: typeof t.items === 'string' ? JSON.parse(t.items) : t.items, 
+        ...t, items: typeof t.items === 'string' ? JSON.parse(t.items) : t.items, 
         payments: typeof t.payments === 'string' ? JSON.parse(t.payments) : t.payments 
     }));
   },
@@ -240,20 +188,22 @@ export const StorageService = {
     await supabase.from('transactions').insert({ ...t, store_id: storeId });
   },
 
-  // Purchases
   getPurchases: async (): Promise<Purchase[]> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('purchases').select('*').eq('store_id', storeId).order('date', { ascending: false });
     return (data || []).map((p: any) => ({ 
-        ...p, 
-        items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items 
+        ...p, items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items 
     }));
   },
 
   savePurchase: async (p: Purchase) => {
     const storeId = await getStoreId();
-    const { error } = await supabase.from('purchases').insert({ ...p, store_id: storeId });
-    if (error) console.error("Error saving purchase:", error);
+    const { error } = await supabase.from('purchases').insert({ 
+        id: p.id, date: p.date, supplierId: p.supplierId, invoiceNumber: p.invoiceNumber,
+        total: p.total, amountPaid: p.amountPaid, items: p.items, status: p.status,
+        received: p.received, store_id: storeId 
+    });
+    if (error) throw error;
   },
 
   updatePurchase: async (p: Purchase) => {
@@ -263,27 +213,38 @@ export const StorageService = {
         received: p.received,
         amountPaid: p.amountPaid 
     }).eq('id', p.id).eq('store_id', storeId);
-    if (error) console.error("Error updating purchase:", error);
+    if (error) throw error;
   },
 
   confirmReceptionAndSyncStock: async (purchase: Purchase) => {
       const storeId = await getStoreId();
-      if (purchase.received === 'YES') return; // Ya se ingreso
+      if (purchase.received === 'YES') return;
 
-      // 1. Marcar como recibida en la nube
-      await supabase.from('purchases').update({ received: 'YES' }).eq('id', purchase.id).eq('store_id', storeId);
-
-      // 2. Por cada item, actualizar stock real en la nube
+      // 1. Actualizar stock Cloud de cada producto
       for (const item of purchase.items) {
-          const { data: product } = await supabase.from('products').select('stock').eq('id', item.productId).eq('store_id', storeId).single();
+          const { data: product } = await supabase.from('products')
+            .select('stock')
+            .eq('id', item.productId)
+            .eq('store_id', storeId)
+            .single();
+          
           if (product) {
-              const newStock = (product.stock || 0) + item.quantity;
-              await supabase.from('products').update({ stock: newStock }).eq('id', item.productId).eq('store_id', storeId);
+              const currentStock = Number(product.stock || 0);
+              const qtyToAdd = Number(item.quantity || 0);
+              await supabase.from('products')
+                .update({ stock: currentStock + qtyToAdd })
+                .eq('id', item.productId)
+                .eq('store_id', storeId);
           }
       }
+
+      // 2. Marcar como recibida
+      await supabase.from('purchases')
+        .update({ received: 'YES' })
+        .eq('id', purchase.id)
+        .eq('store_id', storeId);
   },
 
-  // People
   getCustomers: async (): Promise<Customer[]> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('customers').select('*').eq('store_id', storeId);
@@ -301,7 +262,6 @@ export const StorageService = {
     await supabase.from('suppliers').upsert({ ...s, store_id: storeId });
   },
 
-  // Cash Management
   getShifts: async (): Promise<CashShift[]> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('shifts').select('*').eq('store_id', storeId).order('startTime', { ascending: false });
@@ -325,13 +285,11 @@ export const StorageService = {
   },
 
   getActiveShiftId: (): string | null => localStorage.getItem(KEYS.ACTIVE_SHIFT_ID),
-  
   setActiveShiftId: (id: string | null) => {
     if (id) localStorage.setItem(KEYS.ACTIVE_SHIFT_ID, id);
     else localStorage.removeItem(KEYS.ACTIVE_SHIFT_ID);
   },
 
-  // Settings
   getSettings: async (): Promise<StoreSettings> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('stores').select('settings').eq('id', storeId).single();
