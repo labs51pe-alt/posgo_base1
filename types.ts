@@ -45,7 +45,7 @@ export interface CartItem extends Product {
   discount?: number;
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'yape' | 'plin' | 'transfer';
+export type PaymentMethod = 'cash' | 'card' | 'yape' | 'plin' | 'transfer' | 'credit';
 
 export interface PaymentDetail {
   method: PaymentMethod;
@@ -130,7 +130,8 @@ export interface Purchase {
   supplierId: string;
   invoiceNumber?: string;
   total: number;
-  amountPaid: number; // NUEVO: Para pagos parciales
+  amountPaid: number;
+  paymentMethod?: string;
   items: PurchaseItem[];
   status: 'PAID' | 'PENDING';
   received: 'YES' | 'NO';

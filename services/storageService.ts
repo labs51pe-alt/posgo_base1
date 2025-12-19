@@ -159,6 +159,7 @@ export const StorageService = {
         invoiceNumber: p.invoice_number || p.invoiceNumber,
         total: Number(p.total || 0),
         amountPaid: Number(p.amount_paid || p.amountPaid || 0),
+        paymentMethod: p.payment_method || 'cash',
         items: typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []),
         status: p.status,
         received: p.received || 'NO'
@@ -174,6 +175,7 @@ export const StorageService = {
         invoice_number: p.invoiceNumber,
         total: p.total, 
         amount_paid: p.amountPaid, 
+        payment_method: p.paymentMethod || 'cash',
         items: p.items, 
         status: p.status,
         received: p.received || 'NO', 
