@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Wallet, X, Banknote, Smartphone, Clock, Lock, Rocket, DollarSign, ArrowUpCircle, Store, History, CheckCircle2, Zap, Coins } from 'lucide-react';
+import { Wallet, X, Banknote, Smartphone, Clock, Lock, Rocket, DollarSign, ArrowUpCircle, Store, History, CheckCircle2, Zap, Coins, CreditCard } from 'lucide-react';
 
 export const CashControlModal = ({ isOpen, onClose, activeShift, movements, transactions, onCashAction, currency }: any) => {
   const [cashAmount, setCashAmount] = useState('');
@@ -18,7 +18,7 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
   const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
   const totals = useMemo(() => {
-    if (!activeShift) return { cash: 0, digital: 0, start: 0 };
+    if (!activeShift) return { cash: 0, digital: 0, start: 0, yape: 0, plin: 0, card: 0 };
     try {
         const shiftId = activeShift.id;
         const shiftMoves = movements.filter((m: any) => m.shiftId === shiftId);
@@ -26,17 +26,24 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
         
         const start = activeShift.startAmount || 0;
         let cash = start;
-        let digital = 0;
+        let yape = 0;
+        let plin = 0;
+        let card = 0;
 
         shiftTrans.forEach((t: any) => {
             if (t.payments) {
                 t.payments.forEach((p: any) => {
                     if (p.method === 'cash') cash += (p.amount || 0);
-                    else digital += (p.amount || 0);
+                    else if (p.method === 'yape') yape += (p.amount || 0);
+                    else if (p.method === 'plin') plin += (p.amount || 0);
+                    else if (p.method === 'card') card += (p.amount || 0);
                 });
             } else {
+                // Fallback para transacciones antiguas sin desglose de pagos
                 if (t.paymentMethod === 'cash') cash += (t.total || 0);
-                else digital += (t.total || 0);
+                else if (t.paymentMethod === 'yape') yape += (t.total || 0);
+                else if (t.paymentMethod === 'plin') plin += (t.total || 0);
+                else if (t.paymentMethod === 'card') card += (t.total || 0);
             }
         });
 
@@ -46,9 +53,9 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
             if (m.type === 'OUT') cash -= amt;
         });
 
-        return { cash, digital, start };
+        return { cash, yape, plin, card, digital: yape + plin + card, start };
     } catch (e) {
-        return { cash: 0, digital: 0, start: 0 };
+        return { cash: 0, digital: 0, start: 0, yape: 0, plin: 0, card: 0 };
     }
   }, [activeShift, movements, transactions]);
 
@@ -69,7 +76,7 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[200] flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
         <div className="bg-white rounded-t-[2.5rem] sm:rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] w-full max-w-lg max-h-[92vh] flex flex-col animate-fade-in-up overflow-hidden border border-white/20">
             
-            {/* Header Modernizado - Más compacto en móvil */}
+            {/* Header */}
             <div className="p-5 sm:p-8 border-b border-slate-50 bg-white flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shadow-slate-200">
@@ -87,20 +94,41 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
             
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8 bg-white space-y-6 sm:space-y-8">
                 {activeShift ? (
-                    /* VISTA CUANDO LA CAJA ESTÁ ABIERTA */
-                    <div className="space-y-5 sm:space-y-6">
+                    <div className="space-y-5 sm:space-y-6 animate-fade-in">
+                        {/* Totales Principales */}
                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
                             <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] text-white shadow-xl shadow-emerald-100 relative overflow-hidden group">
                                 <div className="absolute right-[-10px] bottom-[-10px] opacity-20 group-hover:scale-110 transition-transform"><Banknote className="w-16 h-16 sm:w-24 sm:h-24"/></div>
-                                <p className="text-[9px] sm:text-[10px] font-black uppercase mb-1 tracking-widest opacity-80">En Caja</p>
+                                <p className="text-[9px] sm:text-[10px] font-black uppercase mb-1 tracking-widest opacity-80">Efectivo en Caja</p>
                                 <h3 className="text-xl sm:text-3xl font-black tracking-tighter">{currency}{totals.cash.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</h3>
                             </div>
-                            <div className="bg-white p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-slate-100 flex flex-col justify-center shadow-sm">
-                                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest text-center">Digital</p>
-                                <h3 className="text-lg sm:text-2xl font-black text-indigo-600 text-center tracking-tighter">{currency}{totals.digital.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</h3>
+                            <div className="bg-indigo-600 p-4 sm:p-6 rounded-[2rem] sm:rounded-[2.5rem] text-white flex flex-col justify-center shadow-xl shadow-indigo-100 relative overflow-hidden group">
+                                <div className="absolute right-[-10px] bottom-[-10px] opacity-20 group-hover:scale-110 transition-transform"><Smartphone className="w-16 h-16 sm:w-24 sm:h-24"/></div>
+                                <p className="text-[9px] sm:text-[10px] font-black uppercase mb-1 tracking-widest opacity-80">Total Digital</p>
+                                <h3 className="text-xl sm:text-3xl font-black tracking-tighter">{currency}{totals.digital.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</h3>
                             </div>
                         </div>
 
+                        {/* Desglose de Métodos Digitales */}
+                        <div className="grid grid-cols-3 gap-2">
+                             <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col items-center justify-center">
+                                 <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center mb-1"><Smartphone className="w-3.5 h-3.5"/></div>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">Yape</p>
+                                 <p className="text-[11px] font-black text-slate-700">{currency}{totals.yape.toFixed(2)}</p>
+                             </div>
+                             <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col items-center justify-center">
+                                 <div className="w-6 h-6 rounded-lg bg-cyan-100 text-cyan-600 flex items-center justify-center mb-1"><Zap className="w-3.5 h-3.5"/></div>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">Plin</p>
+                                 <p className="text-[11px] font-black text-slate-700">{currency}{totals.plin.toFixed(2)}</p>
+                             </div>
+                             <div className="bg-slate-50 border border-slate-100 p-3 rounded-2xl flex flex-col items-center justify-center">
+                                 <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center mb-1"><CreditCard className="w-3.5 h-3.5"/></div>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">Tarjeta</p>
+                                 <p className="text-[11px] font-black text-slate-700">{currency}{totals.card.toFixed(2)}</p>
+                             </div>
+                        </div>
+
+                        {/* Selector de Acción */}
                         <div className="flex bg-slate-100 p-1 rounded-xl sm:rounded-2xl">
                             <button onClick={() => setCashAction('IN')} className={`flex-1 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all tracking-wider ${cashAction === 'IN' ? 'bg-white text-emerald-600 shadow-sm scale-105' : 'text-slate-400 hover:text-slate-600'}`}>INGRESO</button>
                             <button onClick={() => setCashAction('OUT')} className={`flex-1 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all tracking-wider ${cashAction === 'OUT' ? 'bg-white text-rose-600 shadow-sm scale-105' : 'text-slate-400 hover:text-slate-600'}`}>EGRESO</button>
@@ -108,7 +136,6 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
                         </div>
                     </div>
                 ) : (
-                    /* VISTA PREMIUM DE CAJA CERRADA - Más compacta en móvil */
                     <div className="text-center space-y-4 sm:space-y-6 animate-fade-in">
                         <div className="relative inline-block">
                              <div className="w-16 h-16 sm:w-24 sm:h-24 bg-slate-50 rounded-2xl sm:rounded-[2.5rem] border-2 border-slate-100 flex items-center justify-center mx-auto text-slate-300">
@@ -125,7 +152,7 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
                     </div>
                 )}
                 
-                {/* Panel de Inputs con Botones Rápidos - Optimizado para móvil */}
+                {/* Formulario de Entrada de Monto */}
                 <div className="bg-slate-50/50 border-2 border-slate-100 rounded-[2.5rem] sm:rounded-[3rem] p-5 sm:p-8 space-y-5 sm:space-y-6 relative overflow-hidden group focus-within:border-indigo-200 transition-all">
                     <div className="flex items-center justify-between mb-1 px-1">
                         <label className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -144,11 +171,9 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
                             className="w-full pl-12 sm:pl-16 pr-6 py-4 sm:py-6 bg-white border-2 border-transparent rounded-2xl sm:rounded-[2rem] focus:border-indigo-500 outline-none font-black text-3xl sm:text-4xl text-slate-800 placeholder-slate-200 shadow-inner transition-all" 
                             placeholder="0.00" 
                             inputMode="decimal"
-                            autoFocus
                         />
                     </div>
 
-                    {/* Grilla de Montos Rápidos - Mejorada para móvil (3 columnas) */}
                     {cashAction !== 'CLOSE' && (
                         <div className="grid grid-cols-3 gap-2 pt-1">
                             {QUICK_AMOUNTS.map(amt => (
@@ -184,7 +209,7 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
                     </button>
                 </div>
 
-                {/* Historial Corto - Más compacto */}
+                {/* Historial Reciente */}
                 {activeShift && movements.some((m: any) => m.shiftId === activeShift.id) && (
                     <div className="pt-2 animate-fade-in">
                         <div className="flex items-center justify-between mb-3 px-2">
@@ -218,7 +243,7 @@ export const CashControlModal = ({ isOpen, onClose, activeShift, movements, tran
                 )}
             </div>
             
-            {/* Footer de información rápida - Compacto para móvil */}
+            {/* Footer */}
             {activeShift && (
                 <div className="p-4 sm:p-6 bg-slate-900 text-slate-400 border-t border-white/5 flex justify-between items-center px-6 sm:px-10">
                     <div className="flex items-center gap-2">
