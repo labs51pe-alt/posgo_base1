@@ -119,7 +119,7 @@ export interface Supplier {
 
 export interface PurchaseItem {
   productId: string;
-  productName?: string; // Para historial sin depender de si el producto existe luego
+  productName?: string; 
   quantity: number;
   cost: number;
 }
@@ -130,6 +130,7 @@ export interface Purchase {
   supplierId: string;
   invoiceNumber?: string;
   total: number;
+  amountPaid: number; // NUEVO: Para pagos parciales
   items: PurchaseItem[];
   status: 'PAID' | 'PENDING';
   received: 'YES' | 'NO';

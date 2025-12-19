@@ -260,9 +260,27 @@ export const StorageService = {
     const storeId = await getStoreId();
     const { error } = await supabase.from('purchases').update({ 
         status: p.status, 
-        received: p.received 
+        received: p.received,
+        amountPaid: p.amountPaid 
     }).eq('id', p.id).eq('store_id', storeId);
     if (error) console.error("Error updating purchase:", error);
+  },
+
+  confirmReceptionAndSyncStock: async (purchase: Purchase) => {
+      const storeId = await getStoreId();
+      if (purchase.received === 'YES') return; // Ya se ingreso
+
+      // 1. Marcar como recibida en la nube
+      await supabase.from('purchases').update({ received: 'YES' }).eq('id', purchase.id).eq('store_id', storeId);
+
+      // 2. Por cada item, actualizar stock real en la nube
+      for (const item of purchase.items) {
+          const { data: product } = await supabase.from('products').select('stock').eq('id', item.productId).eq('store_id', storeId).single();
+          if (product) {
+              const newStock = (product.stock || 0) + item.quantity;
+              await supabase.from('products').update({ stock: newStock }).eq('id', item.productId).eq('store_id', storeId);
+          }
+      }
   },
 
   // People

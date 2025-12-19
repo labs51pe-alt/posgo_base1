@@ -6,7 +6,7 @@ import {
     Search, Plus, Save, Trash2, Building2, ShoppingBag, 
     TrendingUp, Check, X, FileText, 
     Barcode, ChevronRight, Truck, Calendar, Package, AlertCircle,
-    ArrowUpCircle, DollarSign, PieChart, Info, CreditCard, Clock, Inbox, Award
+    ArrowUpCircle, DollarSign, PieChart, Info, CreditCard, Clock, Inbox, Award, Smartphone, Zap
 } from 'lucide-react';
 
 interface PurchasesViewProps {
@@ -31,7 +31,11 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
     
+    // Estados detalle y pagos
     const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+    const [paymentInput, setPaymentInput] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<any>('cash');
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
     const [newSupplierName, setNewSupplierName] = useState('');
@@ -63,7 +67,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
 
         const totalUnpaid = purchases
             .filter(p => p.status === 'PENDING')
-            .reduce((sum, p) => sum + p.total, 0);
+            .reduce((sum, p) => sum + (p.total - p.amountPaid), 0);
 
         const pendingReceptionCount = purchases.filter(p => p.received === 'NO').length;
 
@@ -107,12 +111,14 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
         if (!selectedSupplierId) { alert('Debes seleccionar un proveedor.'); return; }
         if (purchaseCart.length === 0) { alert('Agrega al menos un producto.'); return; }
 
+        const total = purchaseCart.reduce((s, i) => s + (i.cost * i.quantity), 0);
         const purchase: Purchase = {
             id: crypto.randomUUID(),
             date: new Date().toISOString(),
             supplierId: selectedSupplierId,
             invoiceNumber: invoiceNumber,
-            total: purchaseCart.reduce((s, i) => s + (i.cost * i.quantity), 0),
+            total,
+            amountPaid: total, // Por defecto asumimos pagado al crear en este flujo rápido
             items: purchaseCart.map(i => ({ 
                 productId: i.id, 
                 productName: i.name, 
@@ -143,10 +149,45 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
         setActiveTab('HISTORY');
     };
 
-    const togglePurchaseStatus = async (purchase: Purchase, field: 'status' | 'received', value: any) => {
-        const updated = { ...purchase, [field]: value };
+    const recordPayment = async () => {
+        if (!selectedPurchase || !paymentInput) return;
+        const amt = parseFloat(paymentInput);
+        if (isNaN(amt) || amt <= 0) return;
+
+        setIsUpdating(true);
+        const newPaid = selectedPurchase.amountPaid + amt;
+        const isCompleted = newPaid >= selectedPurchase.total - 0.01;
+        
+        const updated = { 
+            ...selectedPurchase, 
+            amountPaid: Math.min(newPaid, selectedPurchase.total),
+            status: isCompleted ? 'PAID' as const : 'PENDING' as const
+        };
+        
         await StorageService.updatePurchase(updated);
-        window.location.reload(); 
+        setSelectedPurchase(updated);
+        setPaymentInput('');
+        setIsUpdating(false);
+        // Recarga de datos global para reportes
+        window.location.reload();
+    };
+
+    const confirmWarehouseEntry = async () => {
+        if (!selectedPurchase || selectedPurchase.received === 'YES') return;
+        
+        if (window.confirm("¿Confirmas que la mercadería ha llegado? Esto sumará automáticamente el stock a tu inventario Cloud.")) {
+            setIsUpdating(true);
+            try {
+                await StorageService.confirmReceptionAndSyncStock(selectedPurchase);
+                setSelectedPurchase({ ...selectedPurchase, received: 'YES' });
+                alert("¡Stock actualizado exitosamente!");
+                window.location.reload();
+            } catch (e) {
+                alert("Error al sincronizar stock.");
+            } finally {
+                setIsUpdating(false);
+            }
+        }
     };
 
     return (
@@ -268,7 +309,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                                 <td className="p-6">
                                                     <p className="font-black text-slate-800 text-sm truncate">{item.name}</p>
                                                     <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-500">
-                                                        Nuevo Costo Cloud
+                                                        Sincronizar Almacén
                                                     </span>
                                                 </td>
                                                 <td className="p-6">
@@ -304,9 +345,10 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                     <th className="p-6">Fecha</th>
                                     <th className="p-6">Documento</th>
                                     <th className="p-6">Proveedor</th>
-                                    <th className="p-6">Pago</th>
-                                    <th className="p-6">Recibido</th>
-                                    <th className="p-6 text-right">Inversión</th>
+                                    <th className="p-6">Estado Pago</th>
+                                    <th className="p-6 text-right">Saldo</th>
+                                    <th className="p-6">Mercancía</th>
+                                    <th className="p-6 text-right">Total Doc</th>
                                     <th className="p-6"></th>
                                 </tr>
                             </thead>
@@ -321,9 +363,14 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                                 {p.status === 'PAID' ? 'Pagado' : 'Pendiente'}
                                             </span>
                                         </td>
+                                        <td className="p-6 text-right">
+                                            <span className={`text-xs font-black ${p.total - p.amountPaid > 0 ? 'text-rose-500' : 'text-slate-300'}`}>
+                                                {settings.currency}{(p.total - p.amountPaid).toFixed(2)}
+                                            </span>
+                                        </td>
                                         <td className="p-6">
                                             <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.received === 'YES' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
-                                                {p.received === 'YES' ? 'Recibido' : 'En camino'}
+                                                {p.received === 'YES' ? 'Recibido' : 'Pendiente'}
                                             </span>
                                         </td>
                                         <td className="p-6 text-right font-black text-slate-900 text-lg">{settings.currency}{p.total.toFixed(2)}</td>
@@ -334,62 +381,96 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                         </table>
                     </div>
 
-                    {/* Modal Detalle de Compra - Rediseñado según imagen */}
+                    {/* Modal Detalle de Compra - MEJORADO */}
                     {selectedPurchase && (
                         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex justify-center items-center p-4 sm:p-0">
                             <div className="w-full max-w-lg bg-white sm:h-[90vh] rounded-[2.5rem] shadow-2xl animate-fade-in-up flex flex-col overflow-hidden">
                                 
-                                {/* Header del Modal */}
                                 <div className="p-8 border-b border-slate-50 bg-[#0f172a] text-white flex justify-between items-center shrink-0">
                                     <div>
                                         <h3 className="text-2xl font-black tracking-tight leading-none mb-1">Detalle de Compra</h3>
-                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">N° {selectedPurchase.invoiceNumber || 'FFF-001'}</p>
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">N° {selectedPurchase.invoiceNumber || 'S/N'}</p>
                                     </div>
                                     <button onClick={() => setSelectedPurchase(null)} className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all group">
                                         <X className="w-6 h-6 text-white group-hover:rotate-90 transition-transform"/>
                                     </button>
                                 </div>
 
-                                {/* Contenido del Modal */}
-                                <div className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-10 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-8 custom-scrollbar">
                                     
-                                    {/* Tarjetas de Estado (Pago y Mercancía) */}
+                                    {/* Tarjetas de Estado */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-6 bg-slate-50/50 rounded-[2rem] border-2 border-slate-50 text-center">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">ESTADO DE PAGO</p>
-                                            <button 
-                                                onClick={() => togglePurchaseStatus(selectedPurchase, 'status', selectedPurchase.status === 'PAID' ? 'PENDING' : 'PAID')}
-                                                className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg active:scale-95 ${selectedPurchase.status === 'PAID' ? 'bg-emerald-500 text-white shadow-emerald-100' : 'bg-[#ff3b5c] text-white shadow-rose-100'}`}
-                                            >
-                                                {selectedPurchase.status === 'PAID' ? 'LIQUIDADO' : 'POR PAGAR'}
-                                            </button>
+                                        <div className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 text-center">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">PAGO</p>
+                                            <div className={`py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] ${selectedPurchase.status === 'PAID' ? 'bg-emerald-500 text-white' : 'bg-[#ff3b5c] text-white'}`}>
+                                                {selectedPurchase.status === 'PAID' ? 'PAGADO' : 'POR PAGAR'}
+                                            </div>
+                                            <p className="mt-2 text-[11px] font-bold text-slate-500">Saldo: {settings.currency}{(selectedPurchase.total - selectedPurchase.amountPaid).toFixed(2)}</p>
                                         </div>
-                                        <div className="p-6 bg-slate-50/50 rounded-[2rem] border-2 border-slate-50 text-center">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">MERCANCÍA</p>
+                                        <div className="p-5 bg-slate-50/50 rounded-[2rem] border border-slate-100 text-center">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">ALMACÉN</p>
                                             <button 
-                                                onClick={() => togglePurchaseStatus(selectedPurchase, 'received', selectedPurchase.received === 'YES' ? 'NO' : 'YES')}
-                                                className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg active:scale-95 ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white shadow-indigo-100' : 'bg-[#ff9500] text-white shadow-orange-100'}`}
+                                                onClick={confirmWarehouseEntry}
+                                                disabled={selectedPurchase.received === 'YES' || isUpdating}
+                                                className={`w-full py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white' : 'bg-[#ff9500] text-white hover:scale-105 active:scale-95 shadow-lg shadow-orange-100'}`}
                                             >
-                                                {selectedPurchase.received === 'YES' ? 'INGRESADA' : 'PENDIENTE'}
+                                                {selectedPurchase.received === 'YES' ? 'INGRESADA' : 'INGRESAR'}
                                             </button>
+                                            <p className="mt-2 text-[11px] font-bold text-slate-500">{selectedPurchase.received === 'YES' ? 'Stock Sincronizado' : 'Click para Ingresar'}</p>
                                         </div>
                                     </div>
 
-                                    {/* Listado de Productos Estilizado */}
-                                    <div className="space-y-6">
-                                        <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-2 mb-4">
-                                            <Inbox className="w-4 h-4 text-indigo-500"/> PRODUCTOS INGRESADOS
+                                    {/* Sección de Abonos / Pagos */}
+                                    {selectedPurchase.status === 'PENDING' && (
+                                        <div className="bg-rose-50/50 border border-rose-100 rounded-[2rem] p-6 space-y-4">
+                                            <div className="flex items-center gap-2 text-rose-600">
+                                                <DollarSign className="w-5 h-5"/>
+                                                <h4 className="text-xs font-black uppercase tracking-wider">Registrar Pago a Proveedor</h4>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{settings.currency}</span>
+                                                     <input 
+                                                        type="number" 
+                                                        className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 font-black text-slate-800 outline-none focus:border-rose-400"
+                                                        placeholder="0.00"
+                                                        value={paymentInput}
+                                                        onChange={e => setPaymentInput(e.target.value)}
+                                                     />
+                                                </div>
+                                                <button 
+                                                    onClick={recordPayment}
+                                                    disabled={isUpdating || !paymentInput}
+                                                    className="px-6 py-3 bg-rose-500 text-white rounded-xl font-black text-xs uppercase hover:bg-rose-600 transition-all disabled:opacity-50"
+                                                >
+                                                    Abonar
+                                                </button>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {['cash', 'yape', 'card'].map(m => (
+                                                    <button key={m} onClick={() => setPaymentMethod(m)} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${paymentMethod === m ? 'bg-slate-800 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                                        {m === 'cash' ? 'Efec' : m === 'yape' ? 'QR' : 'Tarj'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Listado de Productos */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <Inbox className="w-4 h-4 text-indigo-500"/> PRODUCTOS COMPRADOS
                                         </h4>
-                                        <div className="space-y-3">
+                                        <div className="space-y-2">
                                             {selectedPurchase.items.map((item, idx) => (
-                                                <div key={idx} className="flex justify-between items-center p-5 bg-slate-50/50 rounded-[1.5rem] border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+                                                <div key={idx} className="flex justify-between items-center p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
                                                     <div className="min-w-0 flex-1 pr-4">
-                                                        <p className="font-black text-slate-800 text-base leading-tight mb-1 truncate">{item.productName || 'Producto'}</p>
-                                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">COSTO UNIT: {settings.currency}{item.cost.toFixed(2)}</p>
+                                                        <p className="font-black text-slate-800 text-sm truncate">{item.productName || 'Producto'}</p>
+                                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">COSTO: {settings.currency}{item.cost.toFixed(2)}</p>
                                                     </div>
-                                                    <div className="text-right shrink-0">
-                                                        <p className="font-black text-slate-500 text-sm mb-1">x{item.quantity}</p>
-                                                        <p className="font-black text-indigo-600 text-lg leading-none">{settings.currency}{(item.cost * item.quantity).toFixed(2)}</p>
+                                                    <div className="text-right">
+                                                        <p className="font-black text-slate-500 text-xs">x{item.quantity}</p>
+                                                        <p className="font-black text-indigo-600 text-sm">{settings.currency}{(item.cost * item.quantity).toFixed(2)}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -397,12 +478,21 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Footer del Modal - Inversión Total */}
-                                <div className="p-8 sm:p-10 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-2">
-                                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">INVERSIÓN TOTAL DOC</p>
-                                    <p className="text-4xl sm:text-5xl font-black text-[#0f172a] tracking-tighter">
-                                        {settings.currency}{selectedPurchase.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                    </p>
+                                <div className="p-8 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">TOTAL INVERTIDO</p>
+                                        <p className="text-4xl font-black text-[#0f172a] tracking-tighter">
+                                            {settings.currency}{selectedPurchase.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    {selectedPurchase.amountPaid > 0 && selectedPurchase.status === 'PENDING' && (
+                                        <div className="text-right">
+                                            <p className="text-[9px] font-black text-emerald-500 uppercase">ABONADO</p>
+                                            <p className="text-xl font-black text-emerald-600 tracking-tight">
+                                                {settings.currency}{selectedPurchase.amountPaid.toFixed(2)}
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -419,14 +509,14 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                             </div>
                         </div>
                         <div className="bg-white p-6 rounded-[2rem] border border-rose-100 shadow-sm shadow-rose-50">
-                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Cuentas por Pagar</p>
+                            <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">Deuda Proveedores</p>
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600"><CreditCard className="w-6 h-6"/></div>
                                 <p className="text-3xl font-black text-rose-800">{settings.currency}{reports.totalUnpaid.toLocaleString()}</p>
                             </div>
                         </div>
                         <div className="bg-white p-6 rounded-[2rem] border border-amber-100 shadow-sm shadow-amber-50">
-                            <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">Órdenes sin Recibir</p>
+                            <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">Mercancía Pendiente</p>
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600"><Clock className="w-6 h-6"/></div>
                                 <p className="text-3xl font-black text-amber-800">{reports.pendingReceptionCount}</p>
