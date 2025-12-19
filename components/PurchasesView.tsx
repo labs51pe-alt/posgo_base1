@@ -13,7 +13,7 @@ interface PurchasesViewProps {
     products: Product[];
     suppliers: Supplier[];
     purchases: Purchase[];
-    onProcessPurchase: (purchase: Purchase, updatedProducts: Product[]) => void;
+    onProcessPurchase: (purchase: Purchase, updatedProducts: Product[]) => Promise<void>;
     onAddSupplier: (supplier: Supplier) => void;
     onRequestNewProduct: (barcode?: string) => void;
     settings: StoreSettings;
@@ -83,25 +83,33 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
         try {
             const total = purchaseCart.reduce((s, i) => s + ((i.cost || 0) * (i.quantity || 0)), 0);
             const purchase: Purchase = {
-                id: crypto.randomUUID(), date: new Date().toISOString(), supplierId: selectedSupplierId,
-                invoiceNumber: invoiceNumber, total, amountPaid: total, 
+                id: crypto.randomUUID(), 
+                date: new Date().toISOString(), 
+                supplierId: selectedSupplierId,
+                invoiceNumber: invoiceNumber, 
+                total, 
+                amountPaid: total, 
                 items: purchaseCart.map(i => ({ productId: i.id, productName: i.name, quantity: i.quantity, cost: i.cost })),
-                status: 'PAID', received: 'YES' 
+                status: 'PAID', 
+                received: 'YES' 
             };
 
             const updatedProducts = products.map(p => {
                 const boughtItem = purchaseCart.find(i => i.id === p.id);
-                if (boughtItem) return { ...p, stock: p.stock + boughtItem.quantity, cost: boughtItem.cost, price: boughtItem.newPrice };
+                if (boughtItem) return { ...p, stock: p.stock + (boughtItem.quantity || 0), cost: boughtItem.cost, price: boughtItem.newPrice };
                 return p;
             });
 
             await onProcessPurchase(purchase, updatedProducts);
+            
             setPurchaseCart([]);
             setSelectedSupplierId('');
             setInvoiceNumber('');
+            alert("¡Compra procesada y stock actualizado con éxito!");
             setActiveTab('HISTORY');
         } catch (e) {
-            alert("Error al guardar la compra. ¿Has creado la tabla en Supabase?");
+            console.error(e);
+            alert("Error al guardar la compra. Asegúrate de que la tabla 'purchases' exista en Supabase.");
         } finally {
             setIsUpdating(false);
         }
@@ -123,9 +131,11 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             await StorageService.updatePurchase(updated);
             setSelectedPurchase(updated);
             setPaymentInput('');
-            window.location.reload();
+            alert("Abono registrado.");
+            // Forzar actualización global
+            window.dispatchEvent(new Event('refreshData'));
         } catch (e) {
-            alert("Error al actualizar el pago. Revisa la conexión o la base de datos.");
+            alert("Error al actualizar el pago.");
         } finally {
             setIsUpdating(false);
         }
@@ -138,10 +148,10 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             try {
                 await StorageService.confirmReceptionAndSyncStock(selectedPurchase);
                 setSelectedPurchase({ ...selectedPurchase, received: 'YES' });
-                alert("¡Stock Cloud actualizado!");
-                window.location.reload();
+                alert("¡Stock Cloud actualizado correctamente!");
+                window.location.reload(); // Recarga para ver el nuevo stock
             } catch (e) {
-                alert("Error al sincronizar almacén. Verifica que la tabla 'purchases' exista en la nube.");
+                alert("Error al sincronizar almacén.");
             } finally {
                 setIsUpdating(false);
             }
@@ -167,6 +177,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
 
             {activeTab === 'NEW' ? (
                 <div className="flex-1 flex flex-col overflow-hidden p-8 gap-6 animate-fade-in">
+                    {/* Selectores superiores */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm shrink-0 items-end">
                         <div className="lg:col-span-2 space-y-3">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Proveedor Seleccionado</label>
@@ -191,6 +202,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                     </div>
 
                     <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden min-h-0">
+                        {/* Buscador lateral */}
                         <div className="w-full lg:w-[380px] flex flex-col bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden shrink-0">
                             <div className="p-6 border-b border-slate-50 bg-slate-50/30">
                                 <div className="relative">
@@ -209,27 +221,40 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                             </div>
                         </div>
                         
+                        {/* Tabla de Carrito de Compras */}
                         <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-left">
-                                    <thead className="bg-slate-50/80 text-[10px] font-black uppercase text-slate-400 sticky top-0">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-50/80 text-[10px] font-black uppercase text-slate-400 sticky top-0 z-10">
                                         <tr>
                                             <th className="p-6">Producto</th>
-                                            <th className="p-6 text-center">Cant.</th>
-                                            <th className="p-6 text-right">Costo Unit.</th>
-                                            <th className="p-6 text-right">Precio Venta</th>
-                                            <th className="p-6 text-right">Subtotal</th>
-                                            <th className="p-6"></th>
+                                            <th className="p-6 text-center w-28">Cant.</th>
+                                            <th className="p-6 text-right w-36">Costo Unit.</th>
+                                            <th className="p-6 text-right w-36">Precio Venta</th>
+                                            <th className="p-6 text-right w-32">Subtotal</th>
+                                            <th className="p-6 w-16"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {purchaseCart.map((item) => (
                                             <tr key={item.id} className="hover:bg-amber-50/10">
-                                                <td className="p-6 font-bold text-slate-800 text-sm">{item.name}</td>
-                                                <td className="p-6 w-24"><input type="number" className="w-full bg-slate-50 rounded-xl p-2 text-center font-black" value={item.quantity} onChange={e => updatePurchaseItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}/></td>
-                                                <td className="p-6 w-32"><input type="number" className="w-full bg-white border border-slate-100 rounded-xl p-2 text-right font-black" value={item.cost} onChange={e => updatePurchaseItem(item.id, 'cost', parseFloat(e.target.value) || 0)}/></td>
-                                                <td className="p-6 w-32"><input type="number" className="w-full bg-white border border-slate-100 rounded-xl p-2 text-right font-black text-indigo-600" value={item.newPrice} onChange={e => updatePurchaseItem(item.id, 'newPrice', parseFloat(e.target.value) || 0)}/></td>
-                                                <td className="p-6 text-right font-black text-slate-700">{settings.currency}{((item.cost || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                                                <td className="p-6 font-bold text-slate-800 text-sm truncate max-w-[200px]">{item.name}</td>
+                                                <td className="p-4 w-28">
+                                                    <input type="number" className="w-full bg-slate-50 rounded-xl px-2 py-3 text-center font-black text-lg focus:bg-white focus:ring-2 focus:ring-amber-200 outline-none transition-all" value={item.quantity} onChange={e => updatePurchaseItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}/>
+                                                </td>
+                                                <td className="p-4 w-36">
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-bold">{settings.currency}</span>
+                                                        <input type="number" className="w-full bg-white border border-slate-100 rounded-xl pl-6 pr-2 py-3 text-right font-black text-lg focus:border-amber-400 outline-none" value={item.cost} onChange={e => updatePurchaseItem(item.id, 'cost', parseFloat(e.target.value) || 0)}/>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 w-36">
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-indigo-300 font-bold">{settings.currency}</span>
+                                                        <input type="number" className="w-full bg-white border border-slate-100 rounded-xl pl-6 pr-2 py-3 text-right font-black text-lg text-indigo-600 focus:border-indigo-400 outline-none" value={item.newPrice} onChange={e => updatePurchaseItem(item.id, 'newPrice', parseFloat(e.target.value) || 0)}/>
+                                                    </div>
+                                                </td>
+                                                <td className="p-6 text-right font-black text-slate-700 text-sm">{settings.currency}{((item.cost || 0) * (item.quantity || 0)).toFixed(2)}</td>
                                                 <td className="p-6 text-right"><button onClick={() => setPurchaseCart(prev => prev.filter(i => i.id !== item.id))} className="text-slate-200 hover:text-rose-500 transition-colors"><Trash2 className="w-5 h-5"/></button></td>
                                             </tr>
                                         ))}
@@ -237,7 +262,11 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                 </table>
                             </div>
                             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                <button onClick={handleFinishPurchase} disabled={purchaseCart.length === 0 || !selectedSupplierId || isUpdating} className="px-10 py-5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-20 text-white rounded-[1.8rem] font-black shadow-xl flex items-center gap-3">
+                                <button 
+                                    onClick={handleFinishPurchase} 
+                                    disabled={purchaseCart.length === 0 || !selectedSupplierId || isUpdating} 
+                                    className="px-10 py-5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-20 text-white rounded-[1.8rem] font-black shadow-xl flex items-center gap-3 active:scale-95 transition-all"
+                                >
                                     {isUpdating ? <Loader2 className="w-6 h-6 animate-spin"/> : <Check className="w-6 h-6 stroke-[4px]"/>}
                                     PROCESAR ENTRADA CLOUD
                                 </button>
@@ -267,7 +296,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                     const paid = p.amountPaid || 0;
                                     const balance = Math.max(0, total - paid);
                                     return (
-                                        <tr key={p.id} onClick={() => setSelectedPurchase(p)} className="hover:bg-slate-50 cursor-pointer group">
+                                        <tr key={p.id} onClick={() => setSelectedPurchase(p)} className="hover:bg-slate-50 cursor-pointer group transition-colors">
                                             <td className="p-6 font-bold text-slate-700">{new Date(p.date).toLocaleDateString()}</td>
                                             <td className="p-6 font-mono text-xs text-slate-400">{p.invoiceNumber || 'S/N Doc'}</td>
                                             <td className="p-6 font-bold text-slate-800">{suppliers.find(s => s.id === p.supplierId)?.name || 'N/A'}</td>
@@ -308,7 +337,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                                             <button 
                                                 onClick={handleConfirmWarehouseEntry}
                                                 disabled={selectedPurchase.received === 'YES' || isUpdating}
-                                                className={`w-full py-3 rounded-xl text-[10px] font-black uppercase transition-all ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white' : 'bg-[#ff9500] text-white hover:scale-105 shadow-lg shadow-orange-100'}`}
+                                                className={`w-full py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg active:scale-95 ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white' : 'bg-[#ff9500] text-white hover:bg-orange-600'}`}
                                             >
                                                 {isUpdating ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : selectedPurchase.received === 'YES' ? 'INGRESADA' : 'CONFIRMAR INGRESO'}
                                             </button>
