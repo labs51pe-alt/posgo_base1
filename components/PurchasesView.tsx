@@ -31,10 +31,8 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
     
-    // Detailed View Logic
     const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
 
-    // UI Modals
     const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
     const [newSupplierName, setNewSupplierName] = useState('');
     const [newSupplierContact, setNewSupplierContact] = useState('');
@@ -55,7 +53,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
         ).slice(0, 8);
     }, [products, productSearch]);
 
-    // --- LOGICA DE REPORTES ---
     const reports = useMemo(() => {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -70,7 +67,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
 
         const pendingReceptionCount = purchases.filter(p => p.received === 'NO').length;
 
-        // Top Productos Comprados
         const productStats: Record<string, { name: string, qty: number, invest: number }> = {};
         purchases.forEach(p => {
             p.items.forEach(item => {
@@ -119,12 +115,12 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             total: purchaseCart.reduce((s, i) => s + (i.cost * i.quantity), 0),
             items: purchaseCart.map(i => ({ 
                 productId: i.id, 
-                productName: i.name, // Guardamos el nombre para el historial
+                productName: i.name, 
                 quantity: i.quantity, 
                 cost: i.cost 
             })),
-            status: 'PAID', // Por defecto pagada, se puede cambiar en historial
-            received: 'YES' // Por defecto recibida, se puede cambiar en historial
+            status: 'PAID', 
+            received: 'YES' 
         };
 
         const updatedProducts = products.map(p => {
@@ -150,7 +146,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
     const togglePurchaseStatus = async (purchase: Purchase, field: 'status' | 'received', value: any) => {
         const updated = { ...purchase, [field]: value };
         await StorageService.updatePurchase(updated);
-        // Forzamos refresco local (en una app real App.tsx lo manejaría via callback)
         window.location.reload(); 
     };
 
@@ -175,7 +170,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
             {activeTab === 'NEW' ? (
                 <div className="flex-1 flex flex-col overflow-hidden p-6 lg:p-8 gap-6 animate-fade-in">
                     
-                    {/* Header: Documento y Proveedor */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm shrink-0 items-end">
                         <div className="lg:col-span-2 space-y-3">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
@@ -216,7 +210,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
 
                     <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden min-h-0">
                         
-                        {/* Buscador de Productos (Panel Lateral) */}
                         <div className="w-full lg:w-[380px] flex flex-col bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden shrink-0">
                             <div className="p-6 border-b border-slate-50 bg-slate-50/30">
                                 <h3 className="font-black text-xs text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -256,7 +249,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                             </div>
                         </div>
 
-                        {/* Listado de Carga */}
                         <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
@@ -342,64 +334,75 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                         </table>
                     </div>
 
-                    {/* Detalle de Compra Modal / Sidebar */}
+                    {/* Modal Detalle de Compra - Rediseñado según imagen */}
                     {selectedPurchase && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-end">
-                            <div className="w-full max-w-lg bg-white h-full shadow-2xl animate-fade-in-right flex flex-col">
-                                <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
+                        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex justify-center items-center p-4 sm:p-0">
+                            <div className="w-full max-w-lg bg-white sm:h-[90vh] rounded-[2.5rem] shadow-2xl animate-fade-in-up flex flex-col overflow-hidden">
+                                
+                                {/* Header del Modal */}
+                                <div className="p-8 border-b border-slate-50 bg-[#0f172a] text-white flex justify-between items-center shrink-0">
                                     <div>
-                                        <h3 className="text-xl font-black tracking-tight">Detalle de Compra</h3>
-                                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">N° {selectedPurchase.invoiceNumber || 'S/N'}</p>
+                                        <h3 className="text-2xl font-black tracking-tight leading-none mb-1">Detalle de Compra</h3>
+                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">N° {selectedPurchase.invoiceNumber || 'FFF-001'}</p>
                                     </div>
-                                    <button onClick={() => setSelectedPurchase(null)} className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all"><X className="w-6 h-6 text-white"/></button>
+                                    <button onClick={() => setSelectedPurchase(null)} className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-all group">
+                                        <X className="w-6 h-6 text-white group-hover:rotate-90 transition-transform"/>
+                                    </button>
                                 </div>
-                                <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                                    {/* Información rápida */}
+
+                                {/* Contenido del Modal */}
+                                <div className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-10 custom-scrollbar">
+                                    
+                                    {/* Tarjetas de Estado (Pago y Mercancía) */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estado de Pago</p>
+                                        <div className="p-6 bg-slate-50/50 rounded-[2rem] border-2 border-slate-50 text-center">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">ESTADO DE PAGO</p>
                                             <button 
                                                 onClick={() => togglePurchaseStatus(selectedPurchase, 'status', selectedPurchase.status === 'PAID' ? 'PENDING' : 'PAID')}
-                                                className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${selectedPurchase.status === 'PAID' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}
+                                                className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg active:scale-95 ${selectedPurchase.status === 'PAID' ? 'bg-emerald-500 text-white shadow-emerald-100' : 'bg-[#ff3b5c] text-white shadow-rose-100'}`}
                                             >
-                                                {selectedPurchase.status === 'PAID' ? 'Saldado' : 'Por Pagar'}
+                                                {selectedPurchase.status === 'PAID' ? 'LIQUIDADO' : 'POR PAGAR'}
                                             </button>
                                         </div>
-                                        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mercancía</p>
+                                        <div className="p-6 bg-slate-50/50 rounded-[2rem] border-2 border-slate-50 text-center">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">MERCANCÍA</p>
                                             <button 
                                                 onClick={() => togglePurchaseStatus(selectedPurchase, 'received', selectedPurchase.received === 'YES' ? 'NO' : 'YES')}
-                                                className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white' : 'bg-amber-500 text-white'}`}
+                                                className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all shadow-lg active:scale-95 ${selectedPurchase.received === 'YES' ? 'bg-indigo-600 text-white shadow-indigo-100' : 'bg-[#ff9500] text-white shadow-orange-100'}`}
                                             >
-                                                {selectedPurchase.received === 'YES' ? 'Completa' : 'Pendiente'}
+                                                {selectedPurchase.received === 'YES' ? 'INGRESADA' : 'PENDIENTE'}
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Listado de Items con Precios de Costo */}
-                                    <div>
-                                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2"><Inbox className="w-4 h-4 text-indigo-500"/> Productos Ingresados</h4>
+                                    {/* Listado de Productos Estilizado */}
+                                    <div className="space-y-6">
+                                        <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-2 mb-4">
+                                            <Inbox className="w-4 h-4 text-indigo-500"/> PRODUCTOS INGRESADOS
+                                        </h4>
                                         <div className="space-y-3">
                                             {selectedPurchase.items.map((item, idx) => (
-                                                <div key={idx} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                                    <div>
-                                                        <p className="font-bold text-slate-800 text-sm">{item.productName || 'Producto'}</p>
-                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Costo Unit: {settings.currency}{item.cost.toFixed(2)}</p>
+                                                <div key={idx} className="flex justify-between items-center p-5 bg-slate-50/50 rounded-[1.5rem] border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+                                                    <div className="min-w-0 flex-1 pr-4">
+                                                        <p className="font-black text-slate-800 text-base leading-tight mb-1 truncate">{item.productName || 'Producto'}</p>
+                                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">COSTO UNIT: {settings.currency}{item.cost.toFixed(2)}</p>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="font-black text-slate-700 text-sm">x{item.quantity}</p>
-                                                        <p className="font-black text-indigo-600 text-sm">{settings.currency}{(item.cost * item.quantity).toFixed(2)}</p>
+                                                    <div className="text-right shrink-0">
+                                                        <p className="font-black text-slate-500 text-sm mb-1">x{item.quantity}</p>
+                                                        <p className="font-black text-indigo-600 text-lg leading-none">{settings.currency}{(item.cost * item.quantity).toFixed(2)}</p>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="p-8 border-t border-slate-100 bg-slate-50">
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inversión Total Doc</p>
-                                        <p className="text-3xl font-black text-slate-900">{settings.currency}{selectedPurchase.total.toFixed(2)}</p>
-                                    </div>
+
+                                {/* Footer del Modal - Inversión Total */}
+                                <div className="p-8 sm:p-10 border-t border-slate-50 bg-white flex flex-col sm:flex-row justify-between items-center gap-2">
+                                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">INVERSIÓN TOTAL DOC</p>
+                                    <p className="text-4xl sm:text-5xl font-black text-[#0f172a] tracking-tighter">
+                                        {settings.currency}{selectedPurchase.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -407,7 +410,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                 </div>
             ) : activeTab === 'REPORTS' ? (
                 <div className="flex-1 overflow-y-auto p-8 animate-fade-in space-y-10">
-                    {/* KPI Dashboard */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Gastos del Mes</p>
@@ -440,7 +442,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                        {/* Ranking de Productos con Mayor Inversión */}
                         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                             <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><Award className="w-5 h-5 text-amber-500"/> Productos Más Comprados (Inversión)</h3>
                             <div className="space-y-5">
@@ -458,7 +459,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                             </div>
                         </div>
 
-                        {/* Historial rápido por Proveedor */}
                         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                             <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><Building2 className="w-5 h-5 text-indigo-500"/> Inversión por Proveedor</h3>
                             <div className="space-y-4">
@@ -498,7 +498,6 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({
                 </div>
             )}
 
-            {/* Modal Proveedor */}
             {isSupplierModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-fade-in">
                     <div className="bg-white rounded-[3.5rem] w-full max-w-md p-12 shadow-2xl animate-fade-in-up border border-slate-100">
