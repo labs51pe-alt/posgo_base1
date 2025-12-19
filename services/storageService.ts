@@ -1,6 +1,5 @@
 
 import { UserProfile, Product, Transaction, Purchase, StoreSettings, Customer, Supplier, CashShift, CashMovement, Lead, Store } from '../types';
-import { MOCK_PRODUCTS, DEFAULT_SETTINGS } from '../constants';
 import { supabase } from './supabase';
 
 const KEYS = {
@@ -66,7 +65,6 @@ export const StorageService = {
     await supabase.auth.signOut();
   },
 
-  // Leads & Stores (Super Admin)
   saveLead: async (lead: Omit<Lead, 'id' | 'created_at'>) => {
       try {
           await supabase.from('leads').upsert({
@@ -123,7 +121,7 @@ export const StorageService = {
           }
           return { success: true };
       } catch (error: any) {
-          return { success: false, error: error.message || error };
+          return { success: false, error: error };
       }
   },
 
@@ -200,13 +198,12 @@ export const StorageService = {
         amountPaid: Number(p.amount_paid || p.amountPaid || 0),
         items: typeof p.items === 'string' ? JSON.parse(p.items) : p.items,
         status: p.status,
-        received: p.received
+        received: p.received || 'NO'
     }));
   },
 
   savePurchase: async (p: Purchase) => {
     const storeId = await getStoreId();
-    // Mapeamos a snake_case para la base de datos para evitar errores de schema
     const { error } = await supabase.from('purchases').insert({ 
         id: p.id, 
         date: p.date, 
@@ -216,7 +213,7 @@ export const StorageService = {
         amount_paid: p.amountPaid, 
         items: p.items, 
         status: p.status,
-        received: p.received, 
+        received: p.received || 'NO', 
         store_id: storeId 
     });
     if (error) throw error;
@@ -253,10 +250,11 @@ export const StorageService = {
           }
       }
 
-      await supabase.from('purchases')
+      const { error } = await supabase.from('purchases')
         .update({ received: 'YES' })
         .eq('id', purchase.id)
         .eq('store_id', storeId);
+      if (error) throw error;
   },
 
   getCustomers: async (): Promise<Customer[]> => {
@@ -307,7 +305,7 @@ export const StorageService = {
   getSettings: async (): Promise<StoreSettings> => {
     const storeId = await getStoreId();
     const { data } = await supabase.from('stores').select('settings').eq('id', storeId).single();
-    return data?.settings || DEFAULT_SETTINGS;
+    return data?.settings || { name: 'Mi Bodega', currency: 'S/', taxRate: 0.18, pricesIncludeTax: true };
   },
 
   saveSettings: async (settings: StoreSettings) => {

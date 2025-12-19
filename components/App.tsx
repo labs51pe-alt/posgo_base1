@@ -65,34 +65,38 @@ const App: React.FC = () => {
   const refreshAllData = useCallback(async (forcedShiftId?: string | null) => {
       const currentActiveId = forcedShiftId !== undefined ? forcedShiftId : StorageService.getActiveShiftId();
       
-      const [p, t, pur, set, c, sup, sh, mov] = await Promise.all([
-          StorageService.getProducts(),
-          StorageService.getTransactions(),
-          StorageService.getPurchases(),
-          StorageService.getSettings(),
-          StorageService.getCustomers(),
-          StorageService.getSuppliers(),
-          StorageService.getShifts(),
-          StorageService.getMovements()
-      ]);
-      
-      setProducts(p);
-      setTransactions(t);
-      setPurchases(pur);
-      setSettings(set);
-      setCustomers(c);
-      setSuppliers(sup);
-      setMovements(mov);
+      try {
+          const [p, t, pur, set, c, sup, sh, mov] = await Promise.all([
+              StorageService.getProducts(),
+              StorageService.getTransactions(),
+              StorageService.getPurchases(),
+              StorageService.getSettings(),
+              StorageService.getCustomers(),
+              StorageService.getSuppliers(),
+              StorageService.getShifts(),
+              StorageService.getMovements()
+          ]);
+          
+          setProducts(p);
+          setTransactions(t);
+          setPurchases(pur);
+          setSettings(set);
+          setCustomers(c);
+          setSuppliers(sup);
+          setMovements(mov);
 
-      let finalShifts = [...sh];
-      if (currentActiveId && !finalShifts.find(s => s.id === currentActiveId)) {
-          if (localShiftCache && localShiftCache.id === currentActiveId) {
-              finalShifts = [localShiftCache, ...finalShifts];
+          let finalShifts = [...sh];
+          if (currentActiveId && !finalShifts.find(s => s.id === currentActiveId)) {
+              if (localShiftCache && localShiftCache.id === currentActiveId) {
+                  finalShifts = [localShiftCache, ...finalShifts];
+              }
           }
-      }
 
-      setShifts(finalShifts);
-      setActiveShiftId(currentActiveId);
+          setShifts(finalShifts);
+          setActiveShiftId(currentActiveId);
+      } catch (err: any) {
+          console.error("Error al refrescar datos:", err);
+      }
   }, [localShiftCache]);
 
   useEffect(() => {
@@ -124,7 +128,7 @@ const App: React.FC = () => {
       if (user && !loading) {
           refreshAllData();
       }
-  }, [refreshTrigger, user]);
+  }, [refreshTrigger, user, loading, refreshAllData]);
 
   const activeShift = useMemo(() => {
       if (!activeShiftId) return null;
@@ -235,7 +239,7 @@ const App: React.FC = () => {
               StorageService.saveProducts(updatedProducts)
           ]);
           
-          refreshAllData();
+          await refreshAllData();
       } catch (error: any) {
           console.error("Error al sincronizar venta:", error);
           alert("Error de sincronización: " + (error?.message || JSON.stringify(error)));
@@ -245,33 +249,37 @@ const App: React.FC = () => {
   };
 
   const handleCashAction = async (action: 'OPEN' | 'CLOSE' | 'IN' | 'OUT', amount: number, description: string) => {
-      if (action === 'OPEN') {
-          const newId = crypto.randomUUID();
-          const newShift: CashShift = { id: newId, startTime: new Date().toISOString(), startAmount: amount, status: 'OPEN', totalSalesCash: 0, totalSalesDigital: 0 };
-          StorageService.setActiveShiftId(newId);
-          setLocalShiftCache(newShift);
-          setActiveShiftId(newId);
-          await StorageService.saveShift(newShift); 
-          const move: CashMovement = { id: crypto.randomUUID(), shiftId: newId, type: 'OPEN', amount, description: 'Apertura de caja', timestamp: new Date().toISOString() }; 
-          await StorageService.saveMovement(move); 
-          await refreshAllData(newId);
-          setView(ViewState.POS);
-      } else if (action === 'CLOSE' && activeShift) {
-          const closedShift = { ...activeShift, endTime: new Date().toISOString(), endAmount: amount, status: 'CLOSED' as const };
-          StorageService.setActiveShiftId(null); 
-          setActiveShiftId(null); 
-          setLocalShiftCache(null);
-          await StorageService.saveShift(closedShift); 
-          const move: CashMovement = { id: crypto.randomUUID(), shiftId: activeShift.id, type: 'CLOSE', amount, description: 'Cierre de caja', timestamp: new Date().toISOString() }; 
-          await StorageService.saveMovement(move);
-          setTicketType('REPORT'); 
-          setTicketData({ shift: closedShift, movements: movements.filter(m => m.shiftId === activeShift.id), transactions: transactions.filter(t => t.shiftId === activeShift.id) }); 
-          setShowTicket(true);
-          await refreshAllData(null);
-      } else if (activeShift) {
-          const move: CashMovement = { id: crypto.randomUUID(), shiftId: activeShift.id, type: action, amount, description, timestamp: new Date().toISOString() }; 
-          await StorageService.saveMovement(move); 
-          await refreshAllData();
+      try {
+          if (action === 'OPEN') {
+              const newId = crypto.randomUUID();
+              const newShift: CashShift = { id: newId, startTime: new Date().toISOString(), startAmount: amount, status: 'OPEN', totalSalesCash: 0, totalSalesDigital: 0 };
+              StorageService.setActiveShiftId(newId);
+              setLocalShiftCache(newShift);
+              setActiveShiftId(newId);
+              await StorageService.saveShift(newShift); 
+              const move: CashMovement = { id: crypto.randomUUID(), shiftId: newId, type: 'OPEN', amount, description: 'Apertura de caja', timestamp: new Date().toISOString() }; 
+              await StorageService.saveMovement(move); 
+              await refreshAllData(newId);
+              setView(ViewState.POS);
+          } else if (action === 'CLOSE' && activeShift) {
+              const closedShift = { ...activeShift, endTime: new Date().toISOString(), endAmount: amount, status: 'CLOSED' as const };
+              StorageService.setActiveShiftId(null); 
+              setActiveShiftId(null); 
+              setLocalShiftCache(null);
+              await StorageService.saveShift(closedShift); 
+              const move: CashMovement = { id: crypto.randomUUID(), shiftId: activeShift.id, type: 'CLOSE', amount, description: 'Cierre de caja', timestamp: new Date().toISOString() }; 
+              await StorageService.saveMovement(move);
+              setTicketType('REPORT'); 
+              setTicketData({ shift: closedShift, movements: movements.filter(m => m.shiftId === activeShift.id), transactions: transactions.filter(t => t.shiftId === activeShift.id) }); 
+              setShowTicket(true);
+              await refreshAllData(null);
+          } else if (activeShift) {
+              const move: CashMovement = { id: crypto.randomUUID(), shiftId: activeShift.id, type: action, amount, description, timestamp: new Date().toISOString() }; 
+              await StorageService.saveMovement(move); 
+              await refreshAllData();
+          }
+      } catch (err: any) {
+          alert("Error en operación de caja: " + (err?.message || JSON.stringify(err)));
       }
   };
 
@@ -282,18 +290,24 @@ const App: React.FC = () => {
       
       if (!pToSave.id) pToSave.id = crypto.randomUUID();
 
-      if (view === ViewState.SUPER_ADMIN) {
-          const result = await StorageService.saveDemoProductToTemplate(pToSave);
-          if (result.success) {
-              setRefreshTrigger(prev => prev + 1);
-              setIsProductModalOpen(false);
-          } else { alert("Error: " + (result.error?.message || JSON.stringify(result.error))); }
-          return;
-      }
+      try {
+          if (view === ViewState.SUPER_ADMIN) {
+              const result = await StorageService.saveDemoProductToTemplate(pToSave);
+              if (result.success) {
+                  setRefreshTrigger(prev => prev + 1);
+                  setIsProductModalOpen(false);
+              } else { 
+                  alert("Error en Plantilla: " + (result.error?.message || JSON.stringify(result.error))); 
+              }
+              return;
+          }
 
-      await StorageService.saveProductWithImages(pToSave);
-      await refreshAllData();
-      setIsProductModalOpen(false);
+          await StorageService.saveProductWithImages(pToSave);
+          await refreshAllData();
+          setIsProductModalOpen(false);
+      } catch (err: any) {
+          alert("Error al guardar producto: " + (err?.message || JSON.stringify(err)));
+      }
   };
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -364,11 +378,11 @@ const App: React.FC = () => {
     <>
         <Layout currentView={view || ViewState.POS} onChangeView={setView} settings={settings} user={user} onLogout={handleLogout}>
             {view === ViewState.POS && <POSView products={products} cart={cart} transactions={transactions} activeShift={activeShift} settings={settings} customers={customers} onAddToCart={handleAddToCart} onUpdateCart={handleUpdateCartQuantity} onRemoveItem={handleRemoveFromCart} onUpdateDiscount={handleUpdateDiscount} onCheckout={handleCheckout} onClearCart={() => setCart([])} onOpenCashControl={() => setShowCashControl(true)} />}
-            {view === ViewState.INVENTORY && <InventoryView products={products} settings={settings} transactions={transactions} purchases={purchases} onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [] }); setIsProductModalOpen(true); }} onDeleteProduct={async (id) => { if(window.confirm('¿Eliminar producto?')) { await StorageService.deleteDemoProduct(id); await refreshAllData(); } }} onGoToPurchase={handleGoToPurchase} />}
-            {view === ViewState.PURCHASES && <PurchasesView products={products} suppliers={suppliers} purchases={purchases} settings={settings} onProcessPurchase={async (pur, updated) => { await StorageService.savePurchase(pur); await StorageService.saveProducts(updated); await refreshAllData(); }} onAddSupplier={async (s) => { await StorageService.saveSupplier(s); await refreshAllData(); }} onRequestNewProduct={(barcode) => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], barcode: barcode || '', images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} initialSearchTerm={initialPurchaseSearch} onClearInitialSearch={() => setInitialPurchaseSearch('')} />}
+            {view === ViewState.INVENTORY && <InventoryView products={products} settings={settings} transactions={transactions} purchases={purchases} onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [] }); setIsProductModalOpen(true); }} onDeleteProduct={async (id) => { if(window.confirm('¿Eliminar producto?')) { try { await StorageService.deleteDemoProduct(id); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } } }} onGoToPurchase={handleGoToPurchase} />}
+            {view === ViewState.PURCHASES && <PurchasesView products={products} suppliers={suppliers} purchases={purchases} settings={settings} onProcessPurchase={async (pur, updated) => { try { await StorageService.savePurchase(pur); await StorageService.saveProducts(updated); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} onAddSupplier={async (s) => { try { await StorageService.saveSupplier(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} onRequestNewProduct={(barcode) => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], barcode: barcode || '', images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} initialSearchTerm={initialPurchaseSearch} onClearInitialSearch={() => setInitialPurchaseSearch('')} />}
             {view === ViewState.ADMIN && <AdminView transactions={transactions} products={products} shifts={shifts} movements={movements} />}
             {view === ViewState.REPORTS && <ReportsView transactions={transactions} settings={settings} />}
-            {view === ViewState.SETTINGS && <SettingsView settings={settings} onSaveSettings={async (s) => { await StorageService.saveSettings(s); await refreshAllData(); }} />}
+            {view === ViewState.SETTINGS && <SettingsView settings={settings} onSaveSettings={async (s) => { try { await StorageService.saveSettings(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} />}
             {view === ViewState.SUPER_ADMIN && <SuperAdminView onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [] }); setIsProductModalOpen(true); }} lastUpdated={refreshTrigger} />}
         </Layout>
 
@@ -376,7 +390,7 @@ const App: React.FC = () => {
             <div className="fixed top-6 right-6 z-[250] bg-white border border-emerald-100 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 animate-fade-in max-w-[calc(100%-3rem)]">
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping shrink-0"></div>
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2 truncate">
-                    Sincronizando Venta...
+                    Sincronizando...
                 </span>
             </div>
         )}
