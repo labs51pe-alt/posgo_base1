@@ -184,7 +184,7 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
             </div>
 
             {showSqlHelp && (
-                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[2rem] w-full max-w-2xl p-6 shadow-2xl animate-fade-in-up">
                         <div className="flex justify-between items-center mb-6">
                              <h3 className="font-black text-xl">Ejecutar en Supabase SQL Editor</h3>
