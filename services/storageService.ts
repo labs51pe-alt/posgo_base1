@@ -34,13 +34,17 @@ const getStoreId = async (): Promise<string> => {
     if (isDemo()) return DEMO_TEMPLATE_ID;
     if (cachedStoreId) return cachedStoreId;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return DEMO_TEMPLATE_ID;
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return DEMO_TEMPLATE_ID;
 
-    const { data } = await supabase.from('profiles').select('store_id').eq('id', user.id).single();
-    if (data && data.store_id) {
-        cachedStoreId = data.store_id;
-        return data.store_id;
+        const { data, error } = await supabase.from('profiles').select('store_id').eq('id', user.id).maybeSingle();
+        if (data && data.store_id) {
+            cachedStoreId = data.store_id;
+            return data.store_id;
+        }
+    } catch (e) {
+        console.warn("Could not fetch store_id from profiles, defaulting to demo", e);
     }
     return DEMO_TEMPLATE_ID;
 };
@@ -113,33 +117,37 @@ export const StorageService = {
   saveProducts: async (products: Product[]) => {
       const storeId = await getStoreId();
       for (const p of products) {
-          await supabase.from('products').upsert({ 
+          const { error } = await supabase.from('products').upsert({ 
               id: p.id, name: p.name, price: p.price, stock: p.stock, 
               category: p.category, barcode: p.barcode, variants: p.variants || [], 
               cost: p.cost || 0, store_id: storeId, has_variants: p.hasVariants,
               is_pack: p.isPack, pack_items: p.packItems || []
           });
+          if (error) throw new Error(error.message || "Error al guardar productos");
       }
   },
 
   saveProductWithImages: async (product: Product) => {
       const storeId = await getStoreId();
-      await supabase.from('products').upsert({ 
+      const { error: prodError } = await supabase.from('products').upsert({ 
           id: product.id, name: product.name, price: product.price, stock: product.stock, 
           category: product.category, barcode: product.barcode, variants: product.variants || [], 
           cost: product.cost || 0, store_id: storeId, has_variants: product.hasVariants,
           is_pack: product.isPack, pack_items: product.packItems || []
       });
+      if (prodError) throw new Error(prodError.message || "Error de base de datos");
+
       if (product.images) {
           await supabase.from('product_images').delete().eq('product_id', product.id).eq('store_id', storeId);
           if (product.images.length > 0) {
               const imageInserts = product.images.map(imgData => ({ product_id: product.id, image_data: imgData, store_id: storeId }));
-              await supabase.from('product_images').insert(imageInserts);
+              const { error: imgError } = await supabase.from('product_images').insert(imageInserts);
+              if (imgError) throw new Error(imgError.message || "Error al guardar imágenes");
           }
       }
   },
 
-  // PURCHASES
+  // PURCHASES - Mapeo Cloud Mejorado
   getPurchases: async (): Promise<Purchase[]> => {
     const storeId = await getStoreId();
     const { data, error } = await supabase.from('purchases')
@@ -154,12 +162,18 @@ export const StorageService = {
 
     return (data || []).map((p: any) => ({ 
         id: p.id,
+        reference: p.reference || `P${p.id.slice(0,4).toUpperCase()}`,
         date: p.date,
-        supplierId: p.supplier_id || p.supplierId,
-        invoiceNumber: p.invoice_number || p.invoiceNumber,
+        supplierId: p.supplier_id, // snake to camel
+        invoiceNumber: p.invoice_number,
+        subtotal: Number(p.subtotal || 0),
+        tax: Number(p.tax || 0),
         total: Number(p.total || 0),
-        amountPaid: Number(p.amount_paid || p.amountPaid || 0),
+        amountPaid: Number(p.amount_paid || 0),
         paymentMethod: p.payment_method || 'cash',
+        paymentCondition: p.payment_condition || 'CONTADO',
+        payFromCash: !!p.pay_from_cash,
+        taxIncluded: !!p.tax_included,
         items: typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []),
         status: p.status,
         received: p.received || 'NO'
@@ -168,35 +182,74 @@ export const StorageService = {
 
   savePurchase: async (p: Purchase) => {
     const storeId = await getStoreId();
-    const { error } = await supabase.from('purchases').insert({ 
-        id: p.id, 
-        date: p.date, 
-        supplier_id: p.supplierId, 
+    
+    // Traducir camelCase a snake_case para Supabase
+    const dbPayload = {
+        id: p.id,
+        reference: p.reference,
+        date: p.date,
+        supplier_id: p.supplierId,
         invoice_number: p.invoiceNumber,
-        total: p.total, 
-        amount_paid: p.amountPaid, 
-        payment_method: p.paymentMethod || 'cash',
-        items: p.items, 
+        subtotal: p.subtotal,
+        tax: p.tax,
+        total: p.total,
+        amount_paid: p.amountPaid,
+        pay_from_cash: p.payFromCash,
+        payment_condition: p.paymentCondition,
+        tax_included: p.taxIncluded,
+        items: JSON.stringify(p.items),
         status: p.status,
-        received: p.received || 'NO', 
-        store_id: storeId 
-    });
-    if (error) throw error;
-  },
-
-  updatePurchase: async (p: Purchase) => {
-    const storeId = await getStoreId();
-    const { error } = await supabase.from('purchases').update({ 
-        status: p.status, 
         received: p.received,
-        amount_paid: p.amountPaid 
-    }).eq('id', p.id).eq('store_id', storeId);
-    if (error) throw error;
+        store_id: storeId
+    };
+
+    const { error } = await supabase.from('purchases').upsert(dbPayload);
+    if (error) throw new Error(error.message);
   },
 
   confirmReceptionAndSyncStock: async (purchase: Purchase) => {
       const storeId = await getStoreId();
       if (purchase.received === 'YES') return;
+
+      for (const item of purchase.items) {
+          const { data: product } = await supabase.from('products')
+            .select('*')
+            .eq('id', item.productId)
+            .eq('store_id', storeId)
+            .single();
+          
+          if (product) {
+              const currentStock = Number(product.stock || 0);
+              const qtyToAdd = Number(item.quantity || 0);
+              
+              // Lógica de costo: Si es bonificación no altera el costo promedio del sistema
+              const newCost = item.isBonus ? Number(product.cost || 0) : Number(item.cost || 0);
+              
+              // Lógica de precio: Si el usuario definió un nuevo precio en la compra, lo aplicamos a la nube
+              const newPrice = (item.newSellPrice && item.newSellPrice > 0) ? item.newSellPrice : Number(product.price || 0);
+              
+              await supabase.from('products')
+                .update({ 
+                    stock: currentStock + qtyToAdd,
+                    cost: newCost,
+                    price: newPrice
+                })
+                .eq('id', item.productId)
+                .eq('store_id', storeId);
+          }
+      }
+
+      const { error } = await supabase.from('purchases')
+        .update({ received: 'YES', status: 'RECIBIDO' })
+        .eq('id', purchase.id)
+        .eq('store_id', storeId);
+      
+      if (error) throw new Error(error.message);
+  },
+
+  revertReceptionAndSyncStock: async (purchase: Purchase) => {
+      const storeId = await getStoreId();
+      if (purchase.received === 'NO') return;
 
       for (const item of purchase.items) {
           const { data: product } = await supabase.from('products')
@@ -207,19 +260,23 @@ export const StorageService = {
           
           if (product) {
               const currentStock = Number(product.stock || 0);
-              const qtyToAdd = Number(item.quantity || 0);
+              const qtyToSub = Number(item.quantity || 0);
+              
               await supabase.from('products')
-                .update({ stock: currentStock + qtyToAdd })
+                .update({ 
+                    stock: Math.max(0, currentStock - qtyToSub) 
+                })
                 .eq('id', item.productId)
                 .eq('store_id', storeId);
           }
       }
 
       const { error } = await supabase.from('purchases')
-        .update({ received: 'YES' })
+        .update({ received: 'NO', status: 'CONFIRMADO' })
         .eq('id', purchase.id)
         .eq('store_id', storeId);
-      if (error) throw error;
+      
+      if (error) throw new Error(error.message);
   },
 
   // TRANSACTIONS
@@ -235,7 +292,8 @@ export const StorageService = {
 
   saveTransaction: async (t: Transaction) => {
     const storeId = await getStoreId();
-    await supabase.from('transactions').insert({ ...t, store_id: storeId });
+    const { error } = await supabase.from('transactions').insert({ ...t, store_id: storeId });
+    if (error) throw new Error(error.message || "Error al guardar venta");
   },
 
   // CASH CONTROL
@@ -247,7 +305,8 @@ export const StorageService = {
 
   saveShift: async (s: CashShift) => {
     const storeId = await getStoreId();
-    await supabase.from('shifts').upsert({ ...s, store_id: storeId });
+    const { error } = await supabase.from('shifts').upsert({ ...s, store_id: storeId });
+    if (error) throw new Error(error.message || "Error al guardar turno");
   },
 
   getMovements: async (): Promise<CashMovement[]> => {
@@ -258,7 +317,8 @@ export const StorageService = {
 
   saveMovement: async (m: CashMovement) => {
     const storeId = await getStoreId();
-    await supabase.from('movements').insert({ ...m, store_id: storeId });
+    const { error } = await supabase.from('movements').insert({ ...m, store_id: storeId });
+    if (error) throw new Error(error.message || "Error al guardar movimiento");
   },
 
   // SETTINGS & OTHER
@@ -270,24 +330,26 @@ export const StorageService = {
 
   getSuppliers: async (): Promise<Supplier[]> => {
     const storeId = await getStoreId();
-    const { data } = await supabase.from('suppliers').select('*').eq('store_id', storeId);
+    const { data } = await supabase.from('suppliers').select('*').eq('store_id', storeId).order('name', { ascending: true });
     return data || [];
   },
 
   saveSupplier: async (s: Supplier) => {
     const storeId = await getStoreId();
-    await supabase.from('suppliers').upsert({ ...s, store_id: storeId });
+    const { error } = await supabase.from('suppliers').upsert({ ...s, store_id: storeId });
+    if (error) throw new Error(error.message || "Error al guardar proveedor");
   },
 
   getSettings: async (): Promise<StoreSettings> => {
     const storeId = await getStoreId();
-    const { data } = await supabase.from('stores').select('settings').eq('id', storeId).single();
-    return data?.settings || { name: 'Mi Bodega', currency: 'S/', taxRate: 0.18, pricesIncludeTax: true };
+    const { data: storeData } = await supabase.from('stores').select('settings').eq('id', storeId).maybeSingle();
+    return storeData?.settings || { name: 'Mi Bodega', currency: 'S/', taxRate: 0.18, pricesIncludeTax: true };
   },
 
   saveSettings: async (settings: StoreSettings) => {
     const storeId = await getStoreId();
-    await supabase.from('stores').update({ settings }).eq('id', storeId);
+    const { error } = await supabase.from('stores').update({ settings }).eq('id', storeId);
+    if (error) throw new Error(error.message || "Error al guardar configuración");
   },
 
   getActiveShiftId: (): string | null => localStorage.getItem(KEYS.ACTIVE_SHIFT_ID),

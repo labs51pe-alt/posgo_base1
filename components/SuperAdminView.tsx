@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lead, Store, Product } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Building2, Trash2, RefreshCw, ShieldAlert, Package, Plus, Edit, X, ImageIcon, Terminal, Layers, Zap } from 'lucide-react';
+import { Users, Building2, Trash2, RefreshCw, ShieldAlert, Package, Plus, Edit, X, ImageIcon, Terminal, Layers, Zap, Wallet } from 'lucide-react';
 
 interface SuperAdminProps {
     onEditProduct?: (product: Product) => void;
@@ -47,30 +47,72 @@ export const SuperAdminView: React.FC<SuperAdminProps> = ({ onEditProduct, onNew
         }
     };
 
-    const SQL_CODE = `
--- 1. Crear la Tienda Plantilla (Si no existe)
-INSERT INTO "public"."stores" ("id", "created_at", "settings")
-VALUES ('00000000-0000-0000-0000-000000000000', NOW(), '{"name": "Plantilla Global"}')
-ON CONFLICT ("id") DO NOTHING;
+    const SQL_CODE = `-- 1. ASEGURAR TABLAS BASE
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+    store_id uuid DEFAULT '00000000-0000-0000-0000-000000000000',
+    full_name text,
+    role text DEFAULT 'admin'
+);
 
--- 2. Habilitar RLS en Stores (si no está habilitado)
-ALTER TABLE "public"."stores" ENABLE ROW LEVEL SECURITY;
+-- 2. REPARACIÓN INTEGRAL DE LA TABLA PURCHASES
+-- Este script agrega todas las columnas que el StorageService requiere.
 
--- 3. Permitir ver/editar la Tienda Plantilla
-CREATE POLICY "Public Template Store Access" ON "public"."stores"
-FOR ALL USING (id = '00000000-0000-0000-0000-000000000000')
-WITH CHECK (id = '00000000-0000-0000-0000-000000000000');
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS reference text;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS date timestamptz DEFAULT now();
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS supplier_id uuid;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS invoice_number text;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS subtotal numeric DEFAULT 0;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS tax numeric DEFAULT 0;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS total numeric DEFAULT 0;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS amount_paid numeric DEFAULT 0;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS pay_from_cash boolean DEFAULT false;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS tax_included boolean DEFAULT true;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS payment_method text DEFAULT 'cash';
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS payment_condition text DEFAULT 'CONTADO';
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS items jsonb DEFAULT '[]'::jsonb;
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS status text DEFAULT 'BORRADOR';
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS received text DEFAULT 'NO';
+ALTER TABLE public.purchases ADD COLUMN IF NOT EXISTS store_id uuid DEFAULT '00000000-0000-0000-0000-000000000000';
 
--- 4. Permitir productos de la plantilla
-CREATE POLICY "Public Template Products" ON "public"."products"
-FOR ALL USING (store_id = '00000000-0000-0000-0000-000000000000')
-WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
+-- 3. CORRECCIÓN DE NOMBRES SI EXISTEN EN CAMELCASE (MIGRACIÓN)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='purchases' AND column_name='payFromCash') THEN
+        ALTER TABLE public.purchases RENAME COLUMN "payFromCash" TO pay_from_cash;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='purchases' AND column_name='supplierId') THEN
+        ALTER TABLE public.purchases RENAME COLUMN "supplierId" TO supplier_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='purchases' AND column_name='invoiceNumber') THEN
+        ALTER TABLE public.purchases RENAME COLUMN "invoiceNumber" TO invoice_number;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='purchases' AND column_name='amountPaid') THEN
+        ALTER TABLE public.purchases RENAME COLUMN "amountPaid" TO amount_paid;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='purchases' AND column_name='taxIncluded') THEN
+        ALTER TABLE public.purchases RENAME COLUMN "taxIncluded" TO tax_included;
+    END IF;
+END $$;
 
--- 5. Permitir imágenes de la plantilla
-CREATE POLICY "Public Template Images" ON "public"."product_images"
-FOR ALL USING (store_id = '00000000-0000-0000-0000-000000000000')
-WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
-`;
+-- 4. RE-CONFIGURAR SEGURIDAD (RLS)
+ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own store purchases" ON public.purchases;
+
+CREATE POLICY "Users can manage their own store purchases" ON public.purchases
+    FOR ALL
+    TO authenticated
+    USING (
+        store_id = '00000000-0000-0000-0000-000000000000' OR
+        store_id IN (SELECT store_id FROM public.profiles WHERE id = auth.uid())
+    )
+    WITH CHECK (
+        store_id = '00000000-0000-0000-0000-000000000000' OR
+        store_id IN (SELECT store_id FROM public.profiles WHERE id = auth.uid())
+    );
+
+-- 5. RECARGAR ESQUEMA PARA POSTGREST
+NOTIFY pgrst, 'reload schema';`;
 
     return (
         <div className="p-8 h-full bg-[#f8fafc] flex flex-col">
@@ -79,7 +121,7 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
                         <ShieldAlert className="w-8 h-8 text-red-600"/> Super Admin
                     </h1>
-                    <p className="text-slate-500 font-medium">Gestiona la Plantilla Global de Productos</p>
+                    <p className="text-slate-500 font-medium">Gestión Avanzada Cloud</p>
                 </div>
                 <button onClick={() => fetchData(true)} className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm group">
                     <RefreshCw className={`w-5 h-5 text-slate-500 group-hover:text-indigo-600 ${loading ? 'animate-spin' : ''}`}/>
@@ -87,9 +129,9 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
             </div>
 
             <div className="flex flex-wrap gap-4 mb-6">
-                <button onClick={() => setActiveTab('LEADS')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'LEADS' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500'}`}><Users className="w-4 h-4"/> Leads</button>
-                <button onClick={() => setActiveTab('STORES')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'STORES' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500'}`}><Building2 className="w-4 h-4"/> Tiendas</button>
-                <button onClick={() => setActiveTab('DEMO_PRODUCTS')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'DEMO_PRODUCTS' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-500'}`}><Package className="w-4 h-4"/> Plantilla Cloud</button>
+                <button onClick={() => setActiveTab('LEADS')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'LEADS' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-400'}`}><Users className="w-4 h-4"/> Leads</button>
+                <button onClick={() => setActiveTab('STORES')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'STORES' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-400'}`}><Building2 className="w-4 h-4"/> Tiendas</button>
+                <button onClick={() => setActiveTab('DEMO_PRODUCTS')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'DEMO_PRODUCTS' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-400'}`}><Package className="w-4 h-4"/> Plantilla Cloud</button>
             </div>
 
             <div className="flex-1 bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col">
@@ -97,10 +139,10 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                         <div className="flex items-center gap-2 text-amber-600">
                              <ImageIcon className="w-4 h-4"/>
-                             <span className="text-xs font-bold uppercase tracking-wider">Estos productos se verán en todos los Demos</span>
+                             <span className="text-xs font-bold uppercase tracking-wider">Productos Globales</span>
                         </div>
                         <div className="flex gap-2">
-                             <button onClick={() => setShowSqlHelp(true)} className="bg-slate-800 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-black"><Terminal className="w-4 h-4"/> Permisos SQL</button>
+                             <button onClick={() => setShowSqlHelp(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-black"><Terminal className="w-4 h-4"/> REPARAR DB (SQL)</button>
                              <button onClick={onNewProduct} className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-emerald-600"><Plus className="w-4 h-4"/> Nuevo Global</button>
                         </div>
                     </div>
@@ -157,11 +199,6 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                                     <Layers className="w-3 h-3"/> Variantes
                                                 </span>
                                             )}
-                                            {p.isPack && (
-                                                <span className="bg-amber-50 text-amber-600 text-[10px] px-2 py-1 rounded-md font-bold uppercase flex items-center gap-1">
-                                                    <Zap className="w-3 h-3 fill-current"/> Combo
-                                                </span>
-                                            )}
                                         </div>
                                     </td>
                                     <td className="p-6 text-right font-black text-slate-700">S/{p.price.toFixed(2)}</td>
@@ -173,7 +210,6 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                     </td>
                                 </tr>
                             ))}
-                            
                             {activeTab === 'LEADS' && leads.map((l) => (
                                 <tr key={l.id} className="hover:bg-slate-50/50">
                                     <td className="p-6 font-bold text-slate-800">{l.name}</td>
@@ -183,7 +219,6 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
                                     <td className="p-6"><span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black">{l.status || 'NEW'}</span></td>
                                 </tr>
                             ))}
-
                             {activeTab === 'STORES' && stores.map((s) => (
                                 <tr key={s.id} className="hover:bg-slate-50/50">
                                     <td className="p-6 font-mono text-[10px] text-slate-400">{s.id}</td>
@@ -199,13 +234,17 @@ WITH CHECK (store_id = '00000000-0000-0000-0000-000000000000');
 
             {showSqlHelp && (
                 <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-[2rem] w-full max-w-2xl p-6 shadow-2xl animate-fade-in-up">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-6 shadow-2xl animate-fade-in-up">
                         <div className="flex justify-between items-center mb-6">
-                             <h3 className="font-black text-xl">Ejecutar en Supabase SQL Editor</h3>
+                             <h3 className="font-black text-xl text-slate-800 flex items-center gap-2"><Terminal className="w-6 h-6 text-indigo-500"/> Reparar Base de Datos</h3>
                              <button onClick={() => setShowSqlHelp(false)}><X className="w-6 h-6"/></button>
                         </div>
-                        <pre className="bg-slate-900 text-emerald-400 p-4 rounded-xl text-xs overflow-x-auto mb-4 custom-scrollbar">{SQL_CODE}</pre>
-                        <button onClick={() => { navigator.clipboard.writeText(SQL_CODE); alert("Copiado al portapapeles"); }} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors">Copiar Código SQL</button>
+                        <p className="text-sm text-slate-600 mb-4 font-bold">Copia este código y pégalo en el SQL Editor de Supabase:</p>
+                        <pre className="bg-slate-900 text-emerald-400 p-6 rounded-2xl text-[11px] overflow-x-auto mb-6 custom-scrollbar leading-relaxed font-mono">{SQL_CODE}</pre>
+                        <div className="flex gap-4">
+                             <button onClick={() => setShowSqlHelp(false)} className="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black text-xs uppercase">Cerrar</button>
+                             <button onClick={() => { navigator.clipboard.writeText(SQL_CODE); alert("¡Código Copiado! Ve a Supabase, pégalo en el SQL Editor y presiona RUN."); }} className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95 uppercase tracking-widest text-xs">Copiar Código SQL</button>
+                        </div>
                     </div>
                 </div>
             )}

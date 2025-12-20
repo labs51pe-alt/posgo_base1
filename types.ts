@@ -122,18 +122,28 @@ export interface PurchaseItem {
   productName?: string; 
   quantity: number;
   cost: number;
+  isBonus?: boolean;
+  newSellPrice?: number;
 }
+
+export type PurchaseStatus = 'BORRADOR' | 'CONFIRMADO' | 'RECIBIDO' | 'CANCELADO';
 
 export interface Purchase {
   id: string;
+  reference: string;
   date: string;
   supplierId: string;
   invoiceNumber?: string;
+  subtotal: number;
+  tax: number;
   total: number;
   amountPaid: number;
   paymentMethod?: string;
+  paymentCondition: 'CONTADO' | 'CREDITO';
+  payFromCash: boolean;
+  taxIncluded: boolean;
   items: PurchaseItem[];
-  status: 'PAID' | 'PENDING';
+  status: PurchaseStatus;
   received: 'YES' | 'NO';
   store_id?: string;
 }

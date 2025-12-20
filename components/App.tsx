@@ -1,5 +1,4 @@
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ViewState, Product, CartItem, Transaction, StoreSettings, Purchase, CashShift, CashMovement, UserProfile, Customer, Supplier, PackItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { Layout } from './Layout';
@@ -17,6 +16,7 @@ import { POSView } from './POSView';
 import { SuperAdminView } from './SuperAdminView';
 import { DEFAULT_SETTINGS, CATEGORIES } from '../constants';
 import { Save, Image as ImageIcon, Plus, Check, X, Trash2, Search, Package, Rocket, Sparkles, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -243,7 +243,8 @@ const App: React.FC = () => {
           await refreshAllData();
       } catch (error: any) {
           console.error("Error al sincronizar venta:", error);
-          alert("Error de sincronización: " + (error?.message || JSON.stringify(error)));
+          const msg = error?.message || (typeof error === 'string' ? error : "Error de red");
+          alert("Error crítico: " + msg);
       } finally {
           setIsSyncing(false);
       }
@@ -280,8 +281,62 @@ const App: React.FC = () => {
               await refreshAllData();
           }
       } catch (err: any) {
-          alert("Error en operación de caja: " + (err?.message || JSON.stringify(err)));
+          const msg = err?.message || (typeof err === 'string' ? err : "Error de operación");
+          alert("Error en operación de caja: " + msg);
       }
+  };
+
+  const handleProcessPurchase = async (pur: Purchase, updated: Product[]) => {
+      try {
+          setIsSyncing(true);
+          // 1. Guardar la compra
+          await StorageService.savePurchase(pur);
+          
+          // 2. Si se marcó como pagada desde caja y es CONFIRMADA o RECIBIDA, generar salida de efectivo
+          if (pur.payFromCash && pur.amountPaid > 0 && (pur.status === 'CONFIRMADO' || pur.status === 'RECIBIDO')) {
+              if (!activeShift) {
+                  alert("⚠️ No hay turno de caja abierto. El pago contable se registró, pero no se pudo generar el retiro físico de caja.");
+              } else {
+                  await handleCashAction('OUT', pur.amountPaid, `Pago a Proveedor: ${pur.reference}`);
+              }
+          }
+
+          // 3. Sincronizar stock si es necesario (cuando viene de edición directa)
+          if (updated.length > 0) {
+              await StorageService.saveProducts(updated);
+          }
+
+          await refreshAllData();
+      } catch (e: any) {
+          console.error("Purchase sync error:", e);
+          throw e;
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  const handleConfirmPurchaseReception = async (purchase: Purchase) => {
+    try {
+        setIsSyncing(true);
+        await StorageService.confirmReceptionAndSyncStock(purchase);
+        await refreshAllData();
+    } catch (e: any) {
+        alert("Error al confirmar recepción: " + e.message);
+    } finally {
+        setIsSyncing(false);
+    }
+  };
+
+  const handleRevertPurchaseReception = async (purchase: Purchase) => {
+    try {
+        setIsSyncing(true);
+        await StorageService.revertReceptionAndSyncStock(purchase);
+        await refreshAllData();
+    } catch (e: any) {
+        alert("Error al revertir: " + e.message);
+    } finally {
+        setIsSyncing(false);
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -298,7 +353,8 @@ const App: React.FC = () => {
                   setRefreshTrigger(prev => prev + 1);
                   setIsProductModalOpen(false);
               } else { 
-                  alert("Error en Plantilla: " + (result.error?.message || JSON.stringify(result.error))); 
+                  const msg = result.error?.message || (typeof result.error === 'string' ? result.error : "Error de plantilla");
+                  alert("Error en Plantilla: " + msg); 
               }
               return;
           }
@@ -307,7 +363,8 @@ const App: React.FC = () => {
           await refreshAllData();
           setIsProductModalOpen(false);
       } catch (err: any) {
-          alert("Error al guardar producto: " + (err?.message || JSON.stringify(err)));
+          const msg = err?.message || (typeof err === 'string' ? err : "Error al guardar");
+          alert("Error al guardar producto: " + msg);
       }
   };
   
@@ -379,11 +436,25 @@ const App: React.FC = () => {
     <>
         <Layout currentView={view || ViewState.POS} onChangeView={setView} settings={settings} user={user} onLogout={handleLogout}>
             {view === ViewState.POS && <POSView products={products} cart={cart} transactions={transactions} activeShift={activeShift} settings={settings} customers={customers} onAddToCart={handleAddToCart} onUpdateCart={handleUpdateCartQuantity} onRemoveItem={handleRemoveFromCart} onUpdateDiscount={handleUpdateDiscount} onCheckout={handleCheckout} onClearCart={() => setCart([])} onOpenCashControl={() => setShowCashControl(true)} />}
-            {view === ViewState.INVENTORY && <InventoryView products={products} settings={settings} transactions={transactions} purchases={purchases} onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [], images: p.images || [] }); setIsProductModalOpen(true); }} onDeleteProduct={async (id) => { if(window.confirm('¿Eliminar producto?')) { try { await StorageService.deleteDemoProduct(id); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } } }} onGoToPurchase={handleGoToPurchase} />}
-            {view === ViewState.PURCHASES && <PurchasesView products={products} suppliers={suppliers} purchases={purchases} settings={settings} onProcessPurchase={async (pur, updated) => { try { await StorageService.savePurchase(pur); await StorageService.saveProducts(updated); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} onAddSupplier={async (s) => { try { await StorageService.saveSupplier(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} onRequestNewProduct={(barcode) => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], barcode: barcode || '', images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} initialSearchTerm={initialPurchaseSearch} onClearInitialSearch={() => setInitialPurchaseSearch('')} />}
+            {view === ViewState.INVENTORY && <InventoryView products={products} settings={settings} transactions={transactions} purchases={purchases} onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [], images: p.images || [] }); setIsProductModalOpen(true); }} onDeleteProduct={async (id) => { if(window.confirm('¿Eliminar producto?')) { try { await StorageService.deleteDemoProduct(id); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message || "Error al eliminar")); } } }} onGoToPurchase={handleGoToPurchase} />}
+            {view === ViewState.PURCHASES && (
+              <PurchasesView 
+                products={products} 
+                suppliers={suppliers} 
+                purchases={purchases} 
+                settings={settings} 
+                onProcessPurchase={handleProcessPurchase} 
+                onConfirmReception={handleConfirmPurchaseReception}
+                onRevertReception={handleRevertPurchaseReception}
+                onAddSupplier={async (s) => { try { await StorageService.saveSupplier(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message || "Error al guardar")); } }} 
+                onRequestNewProduct={(barcode) => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], barcode: barcode || '', images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} 
+                initialSearchTerm={initialPurchaseSearch} 
+                onClearInitialSearch={() => setInitialPurchaseSearch('')} 
+              />
+            )}
             {view === ViewState.ADMIN && <AdminView transactions={transactions} products={products} shifts={shifts} movements={movements} />}
             {view === ViewState.REPORTS && <ReportsView transactions={transactions} settings={settings} />}
-            {view === ViewState.SETTINGS && <SettingsView settings={settings} onSaveSettings={async (s) => { try { await StorageService.saveSettings(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message||JSON.stringify(e))); } }} />}
+            {view === ViewState.SETTINGS && <SettingsView settings={settings} onSaveSettings={async (s) => { try { await StorageService.saveSettings(s); await refreshAllData(); } catch(e:any){ alert("Error: "+(e?.message || "Error al guardar")); } }} />}
             {view === ViewState.SUPER_ADMIN && <SuperAdminView onNewProduct={() => { setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], packItems: [], images: [], isPack: false, hasVariants: false }); setIsProductModalOpen(true); }} onEditProduct={(p) => { setCurrentProduct({ ...p, variants: p.variants || [], packItems: p.packItems || [], images: p.images || [] }); setIsProductModalOpen(true); }} lastUpdated={refreshTrigger} />}
         </Layout>
 

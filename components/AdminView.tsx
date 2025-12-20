@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Transaction, Product, CashShift, CashMovement } from '../types';
@@ -75,7 +76,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
 
                 {/* KPI CARDS */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-indigo-100 transition-colors">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-indigo-100 transition-colors min-w-0">
                         <div className="flex justify-between items-start">
                             <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600"><DollarSign className="w-6 h-6"/></div>
                         </div>
@@ -85,7 +86,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-emerald-100 transition-colors">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-emerald-100 transition-colors min-w-0">
                         <div className="flex justify-between items-start">
                             <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600"><TrendingUp className="w-6 h-6"/></div>
                         </div>
@@ -95,7 +96,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-pink-100 transition-colors">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 group hover:border-pink-100 transition-colors min-w-0">
                         <div className="flex justify-between items-start">
                             <div className="p-3 bg-pink-50 rounded-2xl text-pink-500"><Package className="w-6 h-6"/></div>
                             {lowStockCount > 0 && <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg">{lowStockCount} Alerta</span>}
@@ -106,7 +107,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40">
+                    <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40 min-w-0">
                          <div className="flex justify-between items-start">
                             <div className="p-3 bg-slate-100 rounded-2xl text-slate-600"><Users className="w-6 h-6"/></div>
                         </div>
@@ -121,11 +122,11 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
                     
                     {/* CHART 1: Sales Trend */}
-                    <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                    <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-w-0">
                         <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-emerald-500"/> Flujo de Ventas
                         </h3>
-                        <div className="h-80">
+                        <div className="h-80 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -139,7 +140,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                     </div>
                     
                     {/* CHART 2: Top Products (Ranking) */}
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-w-0">
                          <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
                              <Award className="w-5 h-5 text-amber-500"/> Top Productos
                          </h3>
@@ -169,12 +170,12 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                 {/* BOTTOM SECTION */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                      {/* Payment Breakdown */}
-                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-w-0">
                         <h3 className="font-bold text-xl text-slate-800 mb-6 flex items-center gap-2">
                              <Wallet className="w-5 h-5 text-purple-500"/> Distribución de Pagos
                         </h3>
-                        <div className="flex items-center gap-8">
-                            <div className="h-48 w-48 shrink-0 relative">
+                        <div className="flex items-center gap-8 flex-wrap lg:flex-nowrap">
+                            <div className="h-48 w-48 shrink-0 relative mx-auto lg:mx-0">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie data={paymentStats} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
@@ -188,7 +189,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ transactions = [], product
                                     <span className="font-black text-slate-300 text-xs uppercase">Pagos</span>
                                 </div>
                             </div>
-                            <div className="flex-1 space-y-4">
+                            <div className="flex-1 space-y-4 min-w-[200px]">
                                 {paymentStats.map((stat, i) => (
                                     <div key={i} className="flex justify-between items-center">
                                         <div className="flex items-center gap-2">
